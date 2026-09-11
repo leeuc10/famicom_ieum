@@ -33,8 +33,12 @@ OPPOSITE = {'up': 'down', 'down': 'up', 'left': 'right', 'right': 'left'}
 STEP = {'up': (0, -1), 'down': (0, 1), 'left': (-1, 0), 'right': (1, 0)}
 
 HERO_SPEED = 138
-SWORD_TIME = 0.30           # 휘두르는 전체 시간
-SWORD_ACTIVE = (0.04, 0.19)  # 이 구간에만 칼날에 판정이 있다
+# 찌르기 한 번의 타이밍. 60fps 기준 대략 내지르기 3프레임, 멈춤 7프레임,
+# 거두기 5프레임이다. 원작처럼 '탁 나갔다 돌아오는' 리듬을 노린 값이다.
+SWORD_TIME = 0.26           # 휘두르는 전체 시간
+SWORD_ACTIVE = (0.05, 0.17)  # 이 구간에만 칼날에 판정이 있다
+SWORD_REACH = 34            # 칼이 뻗는 길이(그림)
+SWORD_BOX = (36, 24)        # 판정 크기. 그림보다 조금 후해야 헛치는 느낌이 덜하다.
 INVULN = 0.9                # 맞은 뒤 무적. 연속으로 갈려 나가는 것을 막는다
 TRANSITION = 0.38
 DOOR_PUSH = 4               # 문턱을 이만큼 밀고 나가면 옆 방으로 넘어간다
@@ -235,21 +239,48 @@ class Hero(Actor):
         return self.swing > 0
 
     @property
+    def swing_elapsed(self):
+        return SWORD_TIME - self.swing
+
+    @property
+    def holding(self):
+        """칼이 끝까지 뻗어 멈춰 있는 구간. 판정이 있는 구간과 같은 말이다."""
+        return self.swinging and SWORD_ACTIVE[0] <= self.swing_elapsed < SWORD_ACTIVE[1]
+
+    @property
+    def thrust(self):
+        """칼이 얼마나 나가 있는지 0~1. 그림과 판정이 이 값 하나를 같이 본다.
+
+        예전에는 둘이 따로 놀았다. 판정이 켜지는 순간 칼은 아직 9px 밖에
+        안 나가 있었고, 반대로 판정이 끝난 뒤에는 끝까지 뻗은 채로 일곱
+        프레임을 머물다 툭 사라졌다. 눈에 보이는 '뻗은 칼'이 정작 안 맞는
+        구간이라 손맛이 어긋났다.
+        """
+        if not self.swinging:
+            return 0.0
+        elapsed = self.swing_elapsed
+        if elapsed < SWORD_ACTIVE[0]:                  # 내지르기
+            return elapsed / SWORD_ACTIVE[0]
+        if self.holding:                               # 끝까지 뻗은 채 멈춤
+            return 1.0
+        return max(0.0, 1.0 - (elapsed - SWORD_ACTIVE[1]) / (SWORD_TIME - SWORD_ACTIVE[1]))
+
+    @property
     def blade(self):
-        """칼날 판정. 발동·회수 구간에는 None 이라 휘두르자마자 맞지는 않는다."""
-        elapsed = SWORD_TIME - self.swing
-        if not (SWORD_ACTIVE[0] <= elapsed < SWORD_ACTIVE[1]):
+        """칼날 판정. 칼이 끝까지 뻗어 멈춰 있는 동안에만 생긴다."""
+        if not self.holding:
             return None
-        # 칼날 폭은 적 크기(20)와 비슷하게 잡는다. 원작처럼 얇게 두면 살짝
+        # 칼날 폭은 적 크기(26)와 비슷하게 잡는다. 원작처럼 얇게 두면 살짝
         # 어긋나기만 해도 빗나가서, 처음 잡는 사람이 검이 고장난 줄 안다.
+        length, width = SWORD_BOX
         r = self.rect
         if self.facing == 'right':
-            return pygame.Rect(r.right - 5, r.centery - 12, 36, 24)
+            return pygame.Rect(r.right - 5, r.centery - width // 2, length, width)
         if self.facing == 'left':
-            return pygame.Rect(r.left - 31, r.centery - 12, 36, 24)
+            return pygame.Rect(r.left + 5 - length, r.centery - width // 2, length, width)
         if self.facing == 'up':
-            return pygame.Rect(r.centerx - 12, r.top - 31, 24, 36)
-        return pygame.Rect(r.centerx - 12, r.bottom - 5, 24, 36)
+            return pygame.Rect(r.centerx - width // 2, r.top + 5 - length, width, length)
+        return pygame.Rect(r.centerx - width // 2, r.bottom - 5, width, length)
 
     def attack(self):
         if not self.swinging:
@@ -750,8 +781,9 @@ class Quest:
 
     def draw_sword(self, offset):
         hero = self.hero
-        elapsed = SWORD_TIME - hero.swing
-        reach = 34 * min(1.0, elapsed / SWORD_ACTIVE[1])
+        reach = round(SWORD_REACH * hero.thrust)
+        if reach < 2:
+            return
         r = hero.rect.move(offset)
         if hero.facing == 'right':
             blade = pygame.Rect(r.right - 4, r.centery - 4, reach, 8)
