@@ -250,6 +250,7 @@ class Game:
             print("  또는 assets/fonts/ 에 ttf 파일을 넣으세요.")
         self.input = KeyboardAdapter()
         self.scene = "title"
+        self.input_ready = False
         self.reset_match()
 
     def reset_match(self) -> None:
@@ -286,7 +287,7 @@ class Game:
         # Start+Select 동시: 게임 종료. 부팅 자동 실행 상태에서는 창을 닫을
         # 수단이 없어 종료 경로가 반드시 있어야 하고, 단독 버튼으로 두면
         # 전시 중에 관람객이 실수로 누르기 때문에 조합키로 막는다.
-        if select and any(pad.held["start"] for pad in pads):
+        if any(pad.held["start"] and pad.held["select"] for pad in pads):
             self.quit()
         if select:
             self.scene = "title"
@@ -472,6 +473,10 @@ class Game:
                     self.quit()
             # 공격이 눌린 프레임에 바로 시작되도록 입력이 update 보다 앞선다.
             pads = self.input.poll()
+            if not self.input_ready:
+                self.input_ready = not any(any(pad.held.values()) for pad in pads)
+                for pad in pads:
+                    pad.clear()
             self.handle_pads(pads)
             self.update(dt, pads)
             if self.scene == "title":

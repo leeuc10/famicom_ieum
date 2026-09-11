@@ -193,26 +193,57 @@ Windows PowerShell에서는 활성화 명령만 바꿉니다.
 ### 4. 실행
 
 ```bash
-python3 main.py
+python3 launcher.py
 ```
 
-800×480 디스플레이에서는 `python3 main.py`만 실행하면 자동으로 전체 화면으로 열립니다. 게임은 800×450으로 표시되고 위아래에 15px씩 여백을 두므로 잘림이나 비율 왜곡이 없습니다. TV 아래에 놓고 컨트롤러로 사용하는 콘솔을 기준으로 모든 해상도에서 전체 화면이 기본입니다. TV 해상도에 맞춰 비율을 유지해 표시하며, 개발할 때는 `--windowed`로 창 모드를 사용할 수 있습니다.
+800×480 디스플레이에서는 `python3 launcher.py`만 실행하면 자동으로 전체 화면으로 열립니다. 통합 메뉴와 패들 게임은 800×480 화면을 사용합니다. 격투 게임은 기존 비율을 유지해 800×450으로 표시하고 위아래에 15px씩 여백을 둡니다. TV 아래에 놓고 컨트롤러로 사용하는 콘솔을 기준으로 모든 해상도에서 전체 화면이 기본입니다. TV 해상도에 맞춰 비율을 유지해 표시하며, 개발할 때는 `--windowed`로 창 모드를 사용할 수 있습니다.
 
 전체 화면을 직접 지정하려면:
 
 ```bash
-python3 main.py --fullscreen
+python3 launcher.py --fullscreen
 ```
 
 가장자리가 계속 조금 잘리면 각 가장자리에 5% 여백을 두고 실행하세요:
 
 ```bash
-python3 main.py --fullscreen --margin 5
+python3 launcher.py --fullscreen --margin 5
 ```
 
 `--margin`은 0~20 사이 정수입니다. 바탕화면도 잘린다면 게임 밖의 디스플레이 설정을 별도로 확인해야 합니다.
 
-종료는 `Start` + `Select`(키보드 `Enter` + `Esc`) 또는 창 닫기입니다.
+### 통합 게임 메뉴
+
+기본 실행 파일은 `launcher.py`입니다. USB 조작기 또는 키보드로 게임 선택부터 복귀까지 조작할 수 있습니다.
+
+| 화면 | 조작 |
+| --- | --- |
+| 통합 메뉴 | 방향키: 선택, A / START: 게임 실행 |
+| 통합 메뉴 종료 | SELECT → A / START로 확인, B / SELECT로 취소 |
+| 게임 중 | START + SELECT: 게임 종료 후 통합 메뉴 복귀 |
+| 패들 듀얼 | 1P W/S, 2P ↑/↓ 또는 조이스틱 위/아래. 먼저 7점 획득 시 승리 |
+| 패들 듀얼 일시정지 | START, A / START로 계속 |
+
+현재 **파미 파이터즈(격투)**와 **패들 듀얼(탁구)** 두 게임이 들어 있습니다. 메뉴 종료는 앱 종료이며 Raspberry Pi의 전원을 끄지 않습니다. 게임 오류가 발생하면 메뉴로 돌아오고 오류 안내를 표시합니다. 실행·복귀 때 누르고 있던 버튼은 놓은 뒤 다시 눌러야 합니다.
+
+격투 게임만 직접 실행하려면 `python3 main.py`를 사용합니다.
+
+#### 게임 추가
+
+`games.json` 목록에 항목을 추가하고 런처를 다시 실행하세요. 목록이 길어지면 3개씩 페이지가 바뀝니다.
+
+```json
+{
+  "title": "MY GAME",
+  "title_ko": "새 게임",
+  "description": "A short description",
+  "description_ko": "간단한 게임 설명",
+  "players": "1-2 PLAYERS",
+  "script": "my_game.py"
+}
+```
+
+`script`는 런처 폴더 기준 Python 파일 경로입니다. 게임에는 같은 Python 환경으로 `--fullscreen` 또는 `--windowed`, `--margin 0~20`이 전달되므로 이 옵션을 처리해야 합니다. `console_ui.py`의 `options()`와 `ConsoleDisplay`를 재사용하면 화면·조작기 입력을 공유할 수 있습니다. 게임 프로세스가 종료되면 런처가 다시 열립니다. 다른 게임을 추가할 때도 START + SELECT 종료 처리를 넣으세요. ROM 에뮬레이터 자동 실행 기능은 포함하지 않습니다.
 
 ---
 
@@ -259,7 +290,7 @@ cd ~/fami-prototype
 python3 -m venv .venv
 source .venv/bin/activate
 python3 -m pip install -r requirements.txt
-python3 main.py
+python3 launcher.py
 ```
 
 Pygame 설치가 빌드 오류를 낸다면 OS 패키지를 먼저 설치합니다.
@@ -268,14 +299,14 @@ Pygame 설치가 빌드 오류를 낸다면 OS 패키지를 먼저 설치합니�
 sudo apt install -y python3-pygame
 ```
 
-그 뒤에는 가상환경 밖에서 `python3 main.py` 로 실행하거나, 가상환경을 유지할 경우 `pip install pygame` 을 다시 시도합니다.
+그 뒤에는 가상환경 밖에서 `python3 launcher.py` 로 실행하거나, 가상환경을 유지할 경우 `pip install pygame` 을 다시 시도합니다.
 
 ### 콘솔처럼 자동 실행하기 (나중 단계)
 
 프로토타입 검증이 끝난 후에만 설정하세요. 데스크톱 자동 시작 파일에 아래 명령을 등록하면 부팅 후 게임이 뜹니다.
 
 ```bash
-/home/<사용자이름>/fami-prototype/.venv/bin/python /home/<사용자이름>/fami-prototype/main.py
+/home/<사용자이름>/fami-prototype/.venv/bin/python /home/<사용자이름>/fami-prototype/launcher.py
 ```
 
 개발 중에는 자동 시작을 켜지 않는 편이 문제를 추적하기 쉽습니다. 자동 시작을 켜면 창 장식이 없어 마우스로 창을 닫을 수 없으므로, `Start` + `Select` 종료 조합이 유일한 탈출구가 됩니다.
@@ -385,6 +416,10 @@ python3 input_adapter.py --test
 
 ```text
 fami-prototype/
+├── launcher.py           # 게임 선택, 실행, 복귀, 종료 확인
+├── games.json            # 게임 등록 목록
+├── console_ui.py         # 800×480 공통 화면과 입력
+├── pong.py               # 2인용 패들 듀얼
 ├── main.py               # 화면 상태, 게임 루프, 전투 판정, 렌더링, 화면 문구
 ├── input_adapter.py      # 논리 버튼 8개, 키보드/HID 어댑터, 배선 점검 화면
 ├── fonts.py              # 한글 폰트 탐색 (실제 렌더 결과까지 확인)
@@ -497,7 +532,7 @@ ESP32 USB HID   ─┘        (논리 버튼 8개)             Game.update()
 | 게임을 끌 방법이 없음 | `Start` + `Select` 동시 입력. 키보드는 `Enter` + `Esc` |
 | 문구가 영어로 나옴 | 한글 폰트가 없는 것. `sudo apt install -y fonts-nanum` 후 재실행 |
 | 글자가 빈 네모로 나옴 | 정상적으로는 발생하지 않음. `assets/fonts/` 에 넣은 폰트가 한글을 포함하지 않는 경우 |
-| 화면이 작거나 잘림 | `python3 main.py --fullscreen` 실행. 가장자리가 잘리면 `--margin 5` 추가 |
+| 화면이 작거나 잘림 | `python3 launcher.py --fullscreen` 실행. 가장자리가 잘리면 `--margin 5` 추가 |
 | DisplayPort 모니터에 신호 없음 | 단순 케이블이 아닌 능동형 HDMI → DP 어댑터인지 확인 |
 
 ---

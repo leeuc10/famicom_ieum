@@ -1,0 +1,18 @@
+[
+  {
+    "title": "FAMI FIGHTERS",
+    "title_ko": "파미 파이터즈",
+    "description": "Local fighting game",
+    "description_ko": "둘이서 즐기는 대전 격투",
+    "players": "2 PLAYERS",
+    "script": "main.py"
+  },
+  {
+    "title": "PADDLE DUEL",
+    "title_ko": "패들 듀얼",
+    "description": "First to 7 wins",
+    "description_ko": "먼저 7점을 얻으면 승리",
+    "players": "2 PLAYERS",
+    "script": "pong.py"
+  }
+]
