@@ -28,7 +28,9 @@ class ConsoleTests(unittest.TestCase):
     def test_list_and_invalid_registry(self):
         games, error = load_games()
         self.assertFalse(error)
-        self.assertEqual(len(games), 2)
+        self.assertTrue(games)
+        for entry in games:
+            self.assertTrue((Path(__file__).parent / entry['script']).is_file(), entry)
         with tempfile.TemporaryDirectory() as folder:
             path = Path(folder) / 'games.json'
             for data in ('{', '{}', '[{}]', '[{"title":"a","script":"b","players":2}]'):
@@ -40,7 +42,7 @@ class ConsoleTests(unittest.TestCase):
     def test_navigation_and_exit_confirmation(self):
         menu = Launcher(False)
         menu.handle((pad('left'),))
-        self.assertEqual(menu.selected, 1)
+        self.assertEqual(menu.selected, len(menu.games) - 1)   # 목록 끝으로 돌아간다
         menu.handle((pad('right'),))
         self.assertEqual(menu.selected, 0)
         self.assertTrue(menu.handle((pad('select'),)))
@@ -79,7 +81,7 @@ class ConsoleTests(unittest.TestCase):
             self.assertFalse(menu.message)
             self.assertTrue(pygame.display.get_init())
         import sys
-        for module, klass in (('main', 'Game'), ('pong', 'PaddleGame')):
+        for module, klass in (('main', 'Game'), ('pong', 'PaddleGame'), ('quest', 'Quest')):
             result = subprocess.run([sys.executable, '-c',
                 f'import pygame; from {module} import {klass}; '
                 f'game = {klass}(fullscreen=False); '

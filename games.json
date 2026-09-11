@@ -14,5 +14,13 @@
     "description_ko": "먼저 7점을 얻으면 승리",
     "players": "2 PLAYERS",
     "script": "pong.py"
+  },
+  {
+    "title": "FAMI QUEST",
+    "title_ko": "파미 퀘스트",
+    "description": "Explore a dungeon alone",
+    "description_ko": "혼자 떠나는 던전 탐험",
+    "players": "1 PLAYER",
+    "script": "quest.py"
   }
 ]
