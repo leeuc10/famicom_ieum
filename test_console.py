@@ -25,6 +25,42 @@ class ConsoleTests(unittest.TestCase):
     def tearDown(self):
         pygame.quit()
 
+    def test_player_system_keys_are_independent(self):
+        from input_adapter import KeyboardAdapter
+        from console_ui import back_combo
+        class Keys:
+            def __init__(self, values): self.values = values
+            def __getitem__(self, key): return key in self.values
+        for keys, expected in (((pygame.K_RETURN, pygame.K_F3), False),
+                               ((pygame.K_F2, pygame.K_ESCAPE), False),
+                               ((pygame.K_RETURN, pygame.K_ESCAPE), True),
+                               ((pygame.K_F2, pygame.K_F3), True)):
+            with patch('pygame.key.get_pressed', return_value=Keys(keys)):
+                self.assertEqual(back_combo(KeyboardAdapter().poll()), expected)
+
+    def test_knockback_is_time_based(self):
+        from quest import Actor, ROOM, LAYOUTS
+        distances = []
+        for fps in (20, 30, 60, 120):
+            actor = Actor(*ROOM.center, 26)
+            actor.knock.update(320, 0)
+            start = actor.pos.x
+            for _ in range(fps):
+                actor.apply_knock(1 / fps, LAYOUTS['open'])
+            distances.append(actor.pos.x - start)
+        self.assertLess(max(distances) - min(distances), 0.00001)
+
+    def test_wiring_screen_fits_display(self):
+        from input_adapter import run_wiring_test
+        from console_ui import ConsoleDisplay
+        captures = []
+        def present(ui):
+            captures.append(ui.screen.get_size())
+            pygame.event.post(pygame.event.Event(pygame.QUIT))
+        with patch.object(ConsoleDisplay, 'present', present):
+            run_wiring_test()
+        self.assertEqual(captures, [(800, 480)])
+
     def test_list_and_invalid_registry(self):
         games, error = load_games()
         self.assertFalse(error)

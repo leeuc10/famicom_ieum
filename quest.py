@@ -197,8 +197,15 @@ class Actor:
         if self.knock.length_squared() < 400:
             self.knock.update(0, 0)
             return
-        self.slide(self.knock.x * dt, self.knock.y * dt, tiles)
-        self.knock *= 0.80
+        # 60fps 감속을 시간 기준으로 적분해 이동 거리도 동일하게 유지한다.
+        rate = -60 * math.log(0.80)
+        duration = min(dt, math.log(self.knock.length() / 20) / rate)
+        decay = math.exp(-rate * duration)
+        distance = self.knock * ((1 - decay) / rate)
+        self.slide(distance.x, distance.y, tiles)
+        self.knock *= decay
+        if duration < dt or self.knock.length_squared() <= 400.000001:
+            self.knock.update(0, 0)
 
 
 def blocked(tiles, rect):

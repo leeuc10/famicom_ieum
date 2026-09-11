@@ -45,8 +45,8 @@ const Button BUTTONS[] = {
   { 7,  'd',        KEY_RIGHT_ARROW },  // RIGHT
   { 15, 'f',        ','             },  // A      - 펀치
   { 16, 'g',        '.'             },  // B      - 킥
-  { 17, KEY_RETURN, KEY_RETURN      },  // START  - 시작/일시정지
-  { 18, KEY_ESC,    KEY_ESC         },  // SELECT - 타이틀 복귀
+  { 17, KEY_RETURN, KEY_F2          },  // START  - 시작/일시정지
+  { 18, KEY_ESC,    KEY_F3          },  // SELECT - 타이틀 복귀
 };
 
 constexpr size_t BUTTON_COUNT = sizeof(BUTTONS) / sizeof(BUTTONS[0]);

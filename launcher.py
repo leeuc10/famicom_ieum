@@ -94,6 +94,53 @@ class Launcher:
                 self.launch()
         return True
 
+    def cover(self, script, accent):
+        """작은 화면에서도 게임 종류를 알아보는 코드 기반 커버 아트."""
+        if not hasattr(self, '_covers'):
+            self._covers = {}
+        key = (script, accent)
+        if key in self._covers:
+            return self._covers[key]
+        art = pygame.Surface((200, 102))
+        for y in range(102):
+            pygame.draw.line(art, shade(accent, 0.20 + y / 510), (0, y), (200, y))
+        if script == 'main.py':
+            pygame.draw.circle(art, shade(GOLD, 0.9), (100, 42), 29)
+            for x, h in ((8, 29), (32, 47), (158, 40), (183, 25)):
+                pygame.draw.rect(art, INK, (x, 84-h, 17, h))
+            pygame.draw.rect(art, INK, (0, 84, 200, 18))
+            for x, color, facing in ((54, P1, 1), (139, P2, -1)):
+                pygame.draw.circle(art, WHITE, (x, 36), 8)
+                pygame.draw.rect(art, color, (x-9, 45, 18, 25), border_radius=3)
+                pygame.draw.line(art, color, (x, 51), (x+facing*25, 48), 8)
+                pygame.draw.line(art, WHITE, (x-4, 68), (x-10, 84), 6)
+                pygame.draw.line(art, WHITE, (x+4, 68), (x+10, 84), 6)
+        elif script == 'pong.py':
+            pygame.draw.rect(art, shade(P2, 0.6), (14, 12, 172, 78), 1, border_radius=6)
+            for y in range(16, 89, 12):
+                pygame.draw.line(art, MUTED, (100, y), (100, y+5), 2)
+            pygame.draw.rect(art, P1, (26, 26, 7, 31), border_radius=3)
+            pygame.draw.rect(art, P2, (167, 49, 7, 31), border_radius=3)
+            for i in range(5):
+                pygame.draw.circle(art, shade(P2, 0.3+i*0.12), (109+i*6, 58-i*3), 3)
+            pygame.draw.circle(art, WHITE, (140, 43), 5)
+        elif script == 'quest.py':
+            for x in range(0, 200, 20):
+                pygame.draw.rect(art, shade(accent, .35), (x, 0, 18, 15))
+                pygame.draw.rect(art, shade(accent, .35), (x, 87, 18, 15))
+            for x in (20, 158):
+                pygame.draw.rect(art, INK, (x, 22, 22, 58))
+                pygame.draw.circle(art, GOLD, (x+11, 41), 5)
+            pygame.draw.circle(art, shade(GOLD,.3), (100, 47), 29)
+            pygame.draw.polygon(art, GOLD, [(78,35),(88,44),(100,29),(112,44),(122,35),(118,62),(82,62)])
+            pygame.draw.rect(art, WHITE, (85,65,30,3))
+        else:
+            pygame.draw.rect(art, accent, (65, 18, 70, 68), border_radius=8)
+            pygame.draw.rect(art, INK, (78, 29, 44, 27), border_radius=3)
+            pygame.draw.circle(art, GOLD, (113, 71), 5)
+        self._covers[key] = art
+        return art
+
     def card(self, index, start):
         """게임 한 칸. 고른 칸은 살짝 떠오르고 금색 테두리가 붙는다."""
         ui = self.ui
@@ -108,13 +155,7 @@ class Launcher:
         accent = P1 if index % 2 == 0 else P2
         art = pygame.Rect(rect.x + 18, rect.y + 18, 200, 102)
         pygame.draw.rect(ui.screen, accent, art, border_radius=8)
-        # 대각선 무늬로 단색 덩어리에 결을 넣는다.
-        stripes = pygame.Surface(art.size, pygame.SRCALPHA)
-        for x in range(-art.height, art.width, 26):
-            pygame.draw.polygon(stripes, (*INK, 28), [(x, art.height), (x + 11, art.height),
-                                                      (x + 11 + art.height, 0), (x + art.height, 0)])
-        ui.screen.blit(stripes, art.topleft)
-        ui.text(f'{index + 1:02d}', art.centerx, art.y + 12, 64, shade(accent, 0.45), center=True)
+        ui.screen.blit(self.cover(game['script'], accent), art.topleft)
         title = game.get('title_ko', game['title']) if ui.ko else game['title']
         desc = game.get('description_ko', game.get('description', '')) if ui.ko else game.get('description', '')
         ui.text(title, rect.x + 18, art.bottom + 16, 22, GOLD if active else WHITE, max_width=200)
@@ -126,9 +167,11 @@ class Launcher:
     def draw(self):
         ui = self.ui
         ui.screen.fill(BG)
+        for y in range(0, 420, 4):
+            pygame.draw.line(ui.screen, (22, 27, 38), (0, y), (800, y))
         pygame.draw.rect(ui.screen, GOLD, (32, 32, 6, 39), border_radius=3)
         ui.text('FAMI CONSOLE', 52, 27, 28)
-        ui.text(ui.label('함께 고르고, 바로 플레이.', 'Pick a game. Play together.'), 52, 67, 18, MUTED)
+        ui.text(ui.label('오늘의 한 판을 골라보세요.', 'Your next game starts here.'), 52, 67, 18, MUTED)
         ui.text(f'{len(self.games):02d} GAMES', 738, 43, 18, GOLD, center=True)
         pygame.draw.line(ui.screen, LINE, (32, 100), (768, 100))
         if self.games:

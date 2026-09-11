@@ -68,10 +68,9 @@ KEYBOARD_LAYOUTS = (
         "down": (pygame.K_DOWN,),
         "punch": (pygame.K_COMMA,),
         "kick": (pygame.K_PERIOD,),
-        # 조작기에는 각자 Start/Select 가 달리지만 키보드 개발 환경에서는
-        # 1P 와 같은 키를 공유한다. 게임이 "누가" 눌렀는지는 보지 않는다.
-        "start": (pygame.K_RETURN, pygame.K_SPACE, pygame.K_p),
-        "select": (pygame.K_ESCAPE,),
+        # 시스템 버튼도 플레이어별 키를 구분한다.
+        "start": (pygame.K_F2,),
+        "select": (pygame.K_F3,),
     },
 )
 
@@ -119,70 +118,50 @@ def run_wiring_test() -> None:
     각 버튼의 눌림 상태, 누적 입력 횟수, 채터링 의심 횟수를 함께 보여 준다.
     채터링 수치가 올라가면 스위치 불량이거나 배선이 길어 노이즈를 타는 것이다.
     """
-    pygame.init()
-    screen = pygame.display.set_mode((900, 470))
-    pygame.display.set_caption("FAMI FIGHTERS - 배선 점검")
-    clock = pygame.time.Clock()
-    korean = find_korean_font()
-    smooth = korean is not None
-    font = pygame.font.Font(korean, 26 if korean else 24)
-    head = pygame.font.Font(korean, 34)
-    title = "조작기 배선 점검" if korean else "PAD WIRING TEST"
-    guide = ("Q 또는 창 닫기로 종료   /   노이즈 값이 0보다 크면 스위치 불량이나 배선 문제"
-             if korean else
-             "Q or close window to quit   /   BOUNCE > 0 means a noisy switch")
-    col_press = "입력" if korean else "PRESS"
-    col_bounce = "노이즈" if korean else "BOUNCE"
-    labels = BUTTON_LABELS_KO if korean else {b: b.upper() for b in BUTTONS}
-
-    ink, dim, live, warn = (28, 31, 45), (150, 156, 170), (245, 191, 66), (220, 62, 64)
-    paper, p1_color, p2_color = (244, 241, 222), (220, 62, 64), (55, 93, 180)
-
-    adapter = KeyboardAdapter()
-    counts = [dict.fromkeys(BUTTONS, 0) for _ in adapter.pads]
-    bounces = [dict.fromkeys(BUTTONS, 0) for _ in adapter.pads]
-    last_ms = [dict.fromkeys(BUTTONS, -BOUNCE_WINDOW_MS * 100) for _ in adapter.pads]
-
+    from console_ui import ConsoleDisplay, BG, GOLD, MUTED, WHITE, P1, P2, PANEL, LINE
+    ui = ConsoleDisplay()
+    counts = [dict.fromkeys(BUTTONS, 0) for _ in range(2)]
+    bounces = [dict.fromkeys(BUTTONS, 0) for _ in range(2)]
+    last_ms = [dict.fromkeys(BUTTONS, -10000) for _ in range(2)]
+    labels = BUTTON_LABELS_KO if ui.ko else {b: b.upper() for b in BUTTONS}
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_q):
                 pygame.quit()
                 return
-
+        pads = ui.input.poll()
+        if any(p.held['start'] and p.held['select'] for p in pads):
+            pygame.quit()
+            return
         now = pygame.time.get_ticks()
-        pads = adapter.poll()
+        ui.screen.fill(BG)
+        ui.text(ui.label('컨트롤러 점검', 'CONTROLLER CHECK'), 32, 22, 28)
+        ui.text('USB / GPIO', 624, 30, 18, GOLD)
         for i, pad in enumerate(pads):
-            for b in BUTTONS:
-                if pad.pressed[b]:
-                    counts[i][b] += 1
-                    if now - last_ms[i][b] < BOUNCE_WINDOW_MS:
-                        bounces[i][b] += 1
-                    last_ms[i][b] = now
-
-        screen.fill(paper)
-        screen.blit(head.render(title, smooth, ink), (40, 24))
-        screen.blit(font.render(guide, smooth, dim), (40, 60))
-
-        for i, pad in enumerate(pads):
-            x = 40 + i * 440
-            color = p1_color if i == 0 else p2_color
-            screen.blit(head.render(f"{i + 1}P", smooth, color), (x, 100))
-            screen.blit(font.render("GPIO", smooth, dim), (x + 62, 108))
-            screen.blit(font.render(col_press, smooth, dim), (x + 250, 108))
-            screen.blit(font.render(col_bounce, smooth, dim), (x + 318, 108))
-            for row, b in enumerate(DISPLAY_ORDER):
-                y = 140 + row * 38
-                box = pygame.Rect(x, y, 26, 26)
-                pygame.draw.rect(screen, color if pad.held[b] else paper, box)
-                pygame.draw.rect(screen, ink, box, 2)
-                screen.blit(font.render(str(ESP32_PINS[b]), smooth, dim), (x + 66, y + 5))
-                screen.blit(font.render(labels[b], smooth, live if pad.held[b] else ink), (x + 110, y + 5))
-                screen.blit(font.render(str(counts[i][b]), smooth, ink), (x + 252, y + 5))
-                bounce = bounces[i][b]
-                screen.blit(font.render(str(bounce), smooth, warn if bounce else dim), (x + 322, y + 5))
-
-        pygame.display.flip()
-        clock.tick(60)
+            x = 24 + i * 388
+            color = P1 if i == 0 else P2
+            ui.panel((x, 78, 364, 338), fill=PANEL, border=LINE)
+            ui.text(f'{i+1}P', x+16, 88, 28, color)
+            ui.text('GPIO', x+172, 99, 14, MUTED)
+            ui.text(ui.label('입력', 'PRESS'), x+240, 99, 14, MUTED)
+            ui.text(ui.label('노이즈', 'NOISE'), x+296, 99, 14, MUTED)
+            for row, button in enumerate(DISPLAY_ORDER):
+                if pad.pressed[button]:
+                    counts[i][button] += 1
+                    if now-last_ms[i][button] < BOUNCE_WINDOW_MS:
+                        bounces[i][button] += 1
+                    last_ms[i][button] = now
+                y = 136 + row * 33
+                pygame.draw.circle(ui.screen, color if pad.held[button] else LINE, (x+24, y+11), 6)
+                ui.text(labels[button], x+42, y, 18, WHITE)
+                ui.text(str(ESP32_PINS[button]), x+185, y, 18, MUTED)
+                ui.text(str(counts[i][button]), x+245, y, 18, color)
+                ui.text(str(bounces[i][button]), x+310, y, 18, GOLD if bounces[i][button] else MUTED)
+        ui.text(ui.label('같은 패드의 START + SELECT: 종료  /  키보드 Q',
+                         'Same pad START + SELECT: Exit  /  Keyboard Q'),
+                400, 439, 18, MUTED, center=True)
+        ui.present()
+        ui.clock.tick(60)
 
 
 if __name__ == "__main__":
