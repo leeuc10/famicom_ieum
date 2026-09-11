@@ -1,5 +1,7 @@
 """Two-player paddle game for the console controllers."""
 import random
+import math
+from game_fx import Sparks, glow
 
 import pygame
 
@@ -14,6 +16,8 @@ TARGET = 7
 class PaddleGame:
     def __init__(self, fullscreen=True, margin=0):
         self.ui = ConsoleDisplay(fullscreen, margin)
+        self.sparks = Sparks()
+        self.ball_glow = glow(28, P2)
         self.scores = [0, 0]
         self.paddles = [pygame.Rect(42, 218, 14, 84), pygame.Rect(744, 218, 14, 84)]
         self.ys = [218.0, 218.0]
@@ -28,6 +32,7 @@ class PaddleGame:
 
     def update(self, dt, pads):
         dt = min(dt, 0.035)
+        self.sparks.update(dt)
         for i, pad in enumerate(pads[:2]):
             self.ys[i] = max(92, min(332, self.ys[i] +
                                     (pad.held['down'] - pad.held['up']) * 320 * dt))
@@ -49,6 +54,7 @@ class PaddleGame:
         for i, paddle in enumerate(self.paddles):
             toward = self.velocity.x < 0 if i == 0 else self.velocity.x > 0
             if toward and paddle.colliderect(ball_rect):
+                self.sparks.burst(self.ball, P1 if i == 0 else P2, 14)
                 self.ball.x = paddle.right + 8 if i == 0 else paddle.left - 8
                 self.velocity.x = min(abs(self.velocity.x) * 1.06, 450) * (1 if i == 0 else -1)
                 self.velocity.y = (self.ball.y - paddle.centery) / 42 * 240
@@ -71,7 +77,12 @@ class PaddleGame:
     def draw_court(self):
         ui = self.ui
         ui.panel(COURT, fill=PANEL, border=LINE, radius=10)
-        pygame.draw.circle(ui.screen, LINE, COURT.center, 52, 2)
+        for x in range(COURT.left+20, COURT.right, 32):
+            pygame.draw.line(ui.screen, (34,43,58), (x,COURT.top+4),(x,COURT.bottom-4))
+        for y in range(COURT.top+16,COURT.bottom,32):
+            pygame.draw.line(ui.screen, (34,43,58), (COURT.left+4,y),(COURT.right-4,y))
+        pygame.draw.circle(ui.screen, P2, COURT.center, 52, 2)
+        pygame.draw.circle(ui.screen, LINE, COURT.center, 59, 1)
         for y in range(COURT.top + 10, COURT.bottom - 8, 24):
             pygame.draw.rect(ui.screen, LINE, (398, y, 4, 12))
         # 금색 ㄱ자 모서리. 코트가 어디까지인지 한눈에 잡아 준다.
@@ -95,6 +106,8 @@ class PaddleGame:
             fade = (i + 1) / (len(self.trail) + 1)
             pygame.draw.circle(ui.screen, shade(PANEL_HI, 1 + fade), (round(x), round(y)),
                                round(3 + 4 * fade))
+        ui.screen.blit(self.ball_glow, (round(self.ball.x)-28, round(self.ball.y)-28))
+        self.sparks.draw(ui.screen)
         pygame.draw.circle(ui.screen, INK, (round(self.ball.x), round(self.ball.y)), 10)
         pygame.draw.circle(ui.screen, WHITE, (round(self.ball.x), round(self.ball.y)), 8)
         if self.countdown > 0 and self.state == 'play':

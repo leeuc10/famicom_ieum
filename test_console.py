@@ -25,6 +25,40 @@ class ConsoleTests(unittest.TestCase):
     def tearDown(self):
         pygame.quit()
 
+    def test_visual_effects_expire_and_are_bounded(self):
+        from game_fx import Sparks
+        effect = Sparks()
+        for _ in range(100):
+            effect.burst((400, 240), (255, 200, 100))
+        self.assertLessEqual(len(effect.items), 96)
+        effect.update(1)
+        self.assertEqual(effect.items, [])
+
+    def test_gameplay_render_states(self):
+        from main import Game
+        from quest import Quest
+        fight = Game(False)
+        fight.begin_match()
+        for attack in ('punch', 'kick'):
+            fight.p1.attack_time = 0
+            fight.p1.start_attack(attack)
+            for _ in range(24):
+                fight.update(1/60, (pad('right'), pad('left')))
+                fight.draw_fight()
+        pygame.quit()
+        quest = Quest(False)
+        quest.new_game()
+        quest.enter_room((2, 0), None)
+        for _ in range(30):
+            quest.elapsed += 1/60
+            quest.hero.bob += .2
+            quest.draw()
+        for facing in ('left', 'right', 'up', 'down'):
+            quest.hero.facing = facing
+            quest.hero.attack()
+            quest.hero.swing = .18
+            quest.draw()
+
     def test_player_system_keys_are_independent(self):
         from input_adapter import KeyboardAdapter
         from console_ui import back_combo

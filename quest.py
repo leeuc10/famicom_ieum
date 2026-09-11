@@ -11,6 +11,7 @@ import math
 import random
 
 import pygame
+from game_fx import Sparks, glow
 
 from console_ui import (BG, GOLD, INK, LINE, MUTED, P1, P2, PANEL, PANEL_HI, WHITE,
                         ConsoleDisplay, back_combo, options)
@@ -379,12 +380,14 @@ class Quest:
         self.art['hero_right'] = self.art['hero_side']
         for kind, pattern in ENEMY_ART.items():
             self.art[kind] = make_sprite(pattern, 4 if kind == 'boss' else scale)
+        self.torch_glow = glow(66, (255, 156, 66))
         self.new_game()
         self.state = 'title'
 
     # ---------- 진행 ----------
 
     def new_game(self):
+        self.sparks = Sparks()
         self.hero = Hero()
         self.room = START_ROOM
         self.visited = {START_ROOM}
@@ -435,6 +438,7 @@ class Quest:
         return True
 
     def enter_room(self, coord, from_direction):
+        self.sparks.items.clear()
         self.room = coord
         self.visited.add(coord)
         self.grid = self.tiles(coord)
@@ -499,6 +503,7 @@ class Quest:
     # ---------- 한 프레임 ----------
 
     def update(self, dt, held, pressed):
+        self.sparks.update(dt)
         self.elapsed += dt
         self.message_time = max(0.0, self.message_time - dt)
         if self.transition:
@@ -521,6 +526,7 @@ class Quest:
             if blade and id(enemy) not in self.hero.struck and blade.colliderect(enemy.rect):
                 self.hero.struck.add(id(enemy))
                 enemy.hit(1, self.hero.rect.center)
+                self.sparks.burst(enemy.rect.center, GOLD, 10)
             if not enemy.dead and enemy.rect.colliderect(self.hero.rect):
                 self.hero.hurt(enemy.touch, enemy.rect.center)
         for shot in state['shots']:
@@ -558,6 +564,7 @@ class Quest:
 
     def collect(self, pickup):
         pickup.taken = True
+        self.sparks.burst(pickup.rect.center, Pickup.COLOR[pickup.kind], 14)
         if pickup.kind == 'key':
             self.hero.keys += 1
             self.say(self.ui.label('열쇠를 얻었다', 'Found a key'))
@@ -606,7 +613,14 @@ class Quest:
     @staticmethod
     def paint_floor(surface, rect, col, row):
         surface.fill((36, 34, 54) if (col + row) % 2 else (31, 30, 48), rect)
-        surface.fill((46, 44, 68), (rect.x + 17, rect.y + 17, 4, 4))
+        pygame.draw.rect(surface, (22,24,37), rect, 1)
+        pygame.draw.line(surface, (47,45,64), (rect.x+3,rect.y+3),(rect.right-4,rect.y+3))
+        # 고정 무늬로 게임의 난수열에 영향을 주지 않는다.
+        if (col * 7 + row * 11) % 5 == 0:
+            pygame.draw.lines(surface,(24,25,39),False,[(rect.x+8,rect.y+12),
+                (rect.x+17,rect.y+19),(rect.x+13,rect.y+28)],2)
+        if (col * 3 + row) % 11 == 0:
+            pygame.draw.line(surface,(54,72,61),(rect.x+4,rect.bottom-5),(rect.x+12,rect.bottom-7),3)
 
     @staticmethod
     def paint_pit(surface, rect, joined_above):
@@ -688,16 +702,30 @@ class Quest:
             self.draw_pixels(art, x, y, Pickup.COLOR[pickup.kind], scale)
         for enemy in state['enemies']:
             sprite = self.art[enemy.kind]
+            phase = self.elapsed * (11 if enemy.kind == 'keese' else 5) + enemy.rect.x * .03
+            bob = round(math.sin(phase)* (5 if enemy.kind == 'keese' else 2))
+            pygame.draw.ellipse(screen, INK, (enemy.rect.centerx-16,enemy.rect.bottom-5,32,9))
+            if enemy.kind == 'keese':
+                # 날개를 접고 펴는 실루엣. 충돌 크기는 변하지 않는다.
+                sprite = pygame.transform.scale(sprite, (round(30+9*math.sin(phase)),36))
+            elif enemy.kind == 'boss':
+                sprite = pygame.transform.scale(sprite,(64,round(64+3*math.sin(phase))))
             if enemy.flash > 0:
                 sprite = sprite.copy()
                 sprite.fill(WHITE, special_flags=pygame.BLEND_RGB_ADD)
             screen.blit(sprite, sprite.get_rect(center=(enemy.rect.centerx + offset[0],
-                                                        enemy.rect.centery + offset[1])))
+                                                        enemy.rect.centery + offset[1] + bob)))
+            if enemy.health < ENEMY_STATS[enemy.kind][0]:
+                bar = pygame.Rect(enemy.rect.centerx-15, enemy.rect.top-13, 30, 3)
+                pygame.draw.rect(screen, INK, bar.inflate(2,2))
+                bar.width = round(30*max(0,enemy.health)/ENEMY_STATS[enemy.kind][0])
+                pygame.draw.rect(screen, P1, bar)
         for shot in state['shots']:
             center = (shot.rect.centerx + offset[0], shot.rect.centery + offset[1])
             pygame.draw.circle(screen, INK, center, 7)
             pygame.draw.circle(screen, (206, 176, 132), center, 5)
         self.draw_hero(offset)
+        self.sparks.draw(screen)
 
     def draw_hero(self, offset):
         hero = self.hero
@@ -707,6 +735,15 @@ class Quest:
         if hero.swinging:
             self.draw_sword(offset)
         sprite = self.art[f'hero_{hero.facing}']
+        cx, cy = hero.rect.centerx + offset[0], hero.rect.centery + offset[1]
+        pygame.draw.ellipse(self.ui.screen, INK, (cx-15,cy+11,30,9))
+        if hero.bob and not hero.swinging:
+            # 두 발이 번갈아 앞쪽으로 나오는 보행 프레임.
+            step = round(math.sin(hero.bob)*3)
+            sprite = sprite.copy()
+            sprite.fill((0,0,0,0),(0,30,36,6))
+            pygame.draw.rect(sprite,(16,18,28),(8,29+max(0,step),7,4))
+            pygame.draw.rect(sprite,(16,18,28),(22,29+max(0,-step),7,4))
         bob = round(math.sin(hero.bob) * 1.5)
         self.ui.screen.blit(sprite, sprite.get_rect(
             center=(hero.rect.centerx + offset[0], hero.rect.centery + offset[1] + bob)))
@@ -784,6 +821,15 @@ class Quest:
             ui.screen.blit(sprite, sprite.get_rect(center=(round(here.x), round(here.y))))
         else:
             ui.screen.blit(self.room_surface(self.room), ROOM.topleft)
+            # 빛은 반투명 표면을 재사용하고 작은 불꽃만 매 프레임 그린다.
+            for x in (ROOM.left+60,ROOM.right-60):
+                y = ROOM.top+35
+                ui.screen.blit(self.torch_glow,(x-66,y-66))
+                pygame.draw.rect(ui.screen,INK,(x-4,y,8,18))
+                flicker = math.sin(self.elapsed*12+x)*3
+                pygame.draw.polygon(ui.screen,(238,125,57),[(x-7,y+2),(x-3,y-13-flicker),
+                    (x+1,y-6),(x+5,y-16+flicker),(x+7,y+2)])
+                pygame.draw.ellipse(ui.screen,GOLD,(x-3,y-7,6,10))
             self.draw_actors((0, 0))
         ui.screen.set_clip(None)
         pygame.draw.rect(ui.screen, LINE, ROOM.inflate(4, 4), 2)

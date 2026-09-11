@@ -16,6 +16,7 @@ import sys
 from dataclasses import dataclass
 
 import pygame
+from game_fx import Sparks
 
 from fonts import find_korean_font
 from input_adapter import KeyboardAdapter, Pad
@@ -181,6 +182,22 @@ def build_stage() -> pygame.Surface:
         y, gap = y + gap, int(gap * 1.5) + 1
     pygame.draw.ellipse(stage, shade(FLOOR, 1.35), (WIDTH // 2 - 300, GROUND_Y + 6, 600, 76), 2)
 
+    # 무대 뒤의 문과 등롱, 원근을 가진 돌바닥.
+    for x in (110, WIDTH-110):
+        pygame.draw.rect(stage, (36,29,46), (x-8,GROUND_Y-167,16,167))
+        pygame.draw.rect(stage, (99,57,58), (x-5,GROUND_Y-161,5,155))
+    pygame.draw.polygon(stage,(39,29,45),[(50,GROUND_Y-165),(WIDTH-50,GROUND_Y-165),
+        (WIDTH-80,GROUND_Y-184),(80,GROUND_Y-184)])
+    pygame.draw.line(stage,EMBER,(80,GROUND_Y-182),(WIDTH-80,GROUND_Y-182),3)
+    for x in (160,WIDTH-160):
+        pygame.draw.line(stage,INK,(x,GROUND_Y-164),(x,GROUND_Y-122),3)
+        pygame.draw.rect(stage,(176,88,62),(x-12,GROUND_Y-127,24,31),border_radius=7)
+        pygame.draw.rect(stage,GOLD,(x-6,GROUND_Y-123,12,23),border_radius=5)
+        pygame.draw.line(stage,INK,(x-15,GROUND_Y-127),(x+15,GROUND_Y-127),4)
+    for x in range(-400, WIDTH+500, 120):
+        pygame.draw.line(stage,shade(FLOOR,1.6),(WIDTH//2+(x-WIDTH//2)*.55,GROUND_Y+4),
+                         (x,HEIGHT),1)
+
     # 비네트. 가장자리를 눌러 가운데 싸움에 눈이 가게 한다.
     vignette = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
     for i in range(80):
@@ -211,6 +228,9 @@ class Fighter:
         self.hitstun = 0.0
         self.hit_flash = 0.0
         self.hit_dir = 1
+        self.pose_time = 0.0
+        self.walk_cycle = 0.0
+        self.moving = False
 
     def sync_rect(self) -> None:
         self.rect.topleft = (round(self.x), round(self.y))
@@ -274,7 +294,10 @@ class Fighter:
         self.hit_dir = 1 if push >= 0 else -1
 
     def update(self, dt: float, pad: Pad, opponent: "Fighter") -> None:
+        self.pose_time += dt
         direction = int(pad.held["right"]) - int(pad.held["left"])
+        self.moving = bool(direction) and not self.busy
+        self.walk_cycle += dt * 13 if self.moving else 0
         if not self.busy:
             self.x += direction * MOVE_SPEED * dt
         self.velocity_y += GRAVITY * dt
@@ -359,27 +382,56 @@ class Fighter:
         pygame.draw.ellipse(shadow, (0, 0, 0, round(120 * (1 - 0.65 * lift))), shadow.get_rect())
         screen.blit(shadow, (r.centerx - width // 2, GROUND_Y - 9))
 
+        # 관절을 따로 그려 걷기·점프·피격 자세를 만든다. 판정 rect는 그대로다.
+        base = WHITE if self.hit_flash > 0 else self.color
+        sway = math.sin(self.walk_cycle) if self.moving else 0
+        breath = math.sin(self.pose_time * 3) * 1.5
+        lean = -self.hit_dir * 7 if self.stunned else self.facing * (3 if self.moving else 0)
+        cx = r.centerx + lean
+        hip = (cx, r.bottom - 25)
+        shoulder = (cx, r.y + 33 + breath)
+        def limb(points, color, width):
+            pygame.draw.lines(screen, INK, False, points, width+4)
+            pygame.draw.lines(screen, color, False, points, width)
+        for side in (-1, 1):
+            stride = side * sway * 12
+            foot = (r.centerx + side*13 + stride, r.bottom-3)
+            knee = (hip[0]+side*11-stride*.3, r.bottom-15)
+            if not self.on_ground:
+                foot = (r.centerx+side*21, r.bottom-17)
+                knee = (hip[0]+side*13, r.bottom-28)
+            limb([hip, knee, foot], shade(base, .7 if side == -1 else .95), 12)
+            pygame.draw.line(screen, INK, foot, (foot[0]+self.facing*9,foot[1]), 9)
+        torso = [(cx-16,shoulder[1]-6),(cx+16,shoulder[1]-6),
+                 (hip[0]+12,hip[1]),(hip[0]-12,hip[1])]
+        pygame.draw.polygon(screen, INK, torso)
+        pygame.draw.polygon(screen, base, torso)
+        pygame.draw.line(screen, shade(base,1.3), (cx-11,shoulder[1]-3),(cx-7,hip[1]-5),4)
+        pygame.draw.polygon(screen, WHITE, [(cx-7,shoulder[1]-5),(cx,shoulder[1]+9),(cx+7,shoulder[1]-5)])
+        pygame.draw.line(screen, INK,(cx-13,hip[1]-2),(cx+13,hip[1]-2),7)
+        pygame.draw.rect(screen,GOLD,(cx-4,hip[1]-5,8,6))
+        # 뒤팔과 앞팔을 서로 다른 자세로 둔다.
+        for side in (-1,1):
+            arm_x = cx + side*15
+            elbow = (arm_x + side*6, shoulder[1]+14)
+            hand = (arm_x+self.facing*8, shoulder[1]+3-side*4)
+            limb([(arm_x,shoulder[1]),elbow,hand],SKIN,8)
+            pygame.draw.circle(screen,INK,hand,8)
+            pygame.draw.circle(screen,shade(base,.8),hand,6)
+        head = pygame.Rect(0,0,27,26)
+        head.midbottom=(cx+self.facing*2,shoulder[1]-2)
+        pygame.draw.rect(screen,INK,head.inflate(4,4),border_radius=5)
+        pygame.draw.rect(screen,SKIN,head,border_radius=4)
+        pygame.draw.rect(screen,INK,(head.x,head.y,head.w,7))
+        pygame.draw.rect(screen,base,(head.x-2,head.y+5,head.w+4,5))
+        ribbon_x=head.centerx-self.facing*15
+        pygame.draw.lines(screen,base,False,[(ribbon_x,head.y+8),
+            (ribbon_x-self.facing*15,head.y+10+math.sin(self.pose_time*8)*4),
+            (ribbon_x-self.facing*23,head.y+15)],4)
+        eye_x=head.x+(18 if self.facing==1 else 4)
+        pygame.draw.rect(screen,INK,(eye_x,head.y+12,5,4))
         if self.attacking:
             self.draw_limb(screen)
-
-        # 도형만으로 그린다. 외부 이미지 없이 돌아가야 하는 프로토타입이다.
-        base = WHITE if self.hit_flash > 0 else self.color
-        pygame.draw.rect(screen, INK, r.inflate(6, 6), border_radius=6)
-        pygame.draw.rect(screen, shade(base, 0.62), r, border_radius=5)           # 몸통 그늘
-        pygame.draw.rect(screen, base, (r.x, r.y, r.w, r.h - 12), border_radius=5)
-        pygame.draw.rect(screen, shade(base, 1.22), (r.x + 5, r.y + 5, r.w - 10, 5), border_radius=3)
-
-        head = pygame.Rect(r.x + 11, r.y + 6, 30, 27)
-        pygame.draw.rect(screen, INK, head.inflate(4, 4), border_radius=4)
-        pygame.draw.rect(screen, SKIN, head, border_radius=3)
-        pygame.draw.rect(screen, shade(base, 0.85), (head.x, head.y, head.w, 8), border_radius=2)
-        eye_x = head.x + (19 if self.facing == 1 else 5)
-        pygame.draw.rect(screen, INK, (eye_x, head.y + 14, 6, 6))
-
-        pygame.draw.rect(screen, INK, (r.x + 6, r.y + 42, r.w - 12, 9))            # 허리띠
-        pygame.draw.rect(screen, GOLD, (r.centerx - 5, r.y + 44, 10, 5))
-        pygame.draw.rect(screen, INK, (r.x + 7, r.bottom - 15, 14, 15), border_radius=2)
-        pygame.draw.rect(screen, INK, (r.right - 21, r.bottom - 15, 14, 15), border_radius=2)
 
         if self.hit_flash > 0:
             self.draw_impact(screen)
@@ -430,6 +482,7 @@ class Game:
         self.input_ready = False
         self.time = 0.0
         self.shake = 0.0
+        self.sparks = Sparks()
         self.reset_match()
 
     def build_title_bg(self) -> pygame.Surface:
@@ -571,11 +624,14 @@ class Game:
                 landed.append((attacker, defender))
         for attacker, defender in landed:
             spec = ATTACKS[attacker.attack]
+            self.sparks.burst(defender.rect.center, GOLD if attacker.attack == "kick" else WHITE)
             defender.take_hit(spec, spec.push * attacker.facing)
             # 화면 흔들림은 타격감 표시일 뿐이라 판정에는 영향을 주지 않는다.
             self.shake = max(self.shake, 0.09 + spec.damage * 0.006)
 
     def update(self, dt: float, pads: tuple[Pad, ...]) -> None:
+        if not self.paused:
+            self.sparks.update(dt)
         self.shake = max(0.0, self.shake - dt)
         if self.scene != "fight" or self.paused:
             return
@@ -681,6 +737,7 @@ class Game:
         self.screen.blit(self.stage, (0, 0))
         self.p1.draw(self.screen, self.hitbox)
         self.p2.draw(self.screen, self.hitbox)
+        self.sparks.draw(self.screen)
         self.draw_hud()
         if self.round_result:
             self.overlay(self.round_result, self.tx("next_round"), self.round_accent)
