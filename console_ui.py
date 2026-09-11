@@ -5,12 +5,12 @@ import pygame
 
 from fonts import find_korean_font
 from input_adapter import KeyboardAdapter
+from theme import BG, EMBER, GOLD, INK, LINE, MUTED, P1, P1_DIM, P2, P2_DIM, PANEL, PANEL_HI, WHITE
 
 WIDTH, HEIGHT = 800, 480
-BG = (20, 23, 34)
-WHITE = (242, 240, 229)
-MUTED = (160, 167, 183)
-GOLD = (255, 204, 102)
+# 글자 크기 사다리. 임의의 숫자를 쓰지 않고 이 중에서만 고르면
+# 화면끼리 글자 크기가 미묘하게 어긋나는 일이 없다.
+SIZES = (14, 16, 18, 22, 28, 34, 40, 52, 64)
 
 
 def options():
@@ -46,7 +46,7 @@ class ConsoleDisplay:
         self.screen = pygame.Surface((WIDTH, HEIGHT))
         path = find_korean_font()
         self.ko = path is not None
-        self.fonts = {size: pygame.font.Font(path, size) for size in (18, 22, 28, 40, 64)}
+        self.fonts = {size: pygame.font.Font(path, size) for size in SIZES}
         self.input = KeyboardAdapter()
         self.clock = pygame.time.Clock()
         # A held launch/return button must be released before controlling the next screen.
@@ -55,7 +55,7 @@ class ConsoleDisplay:
     def label(self, ko, en):
         return ko if self.ko else en
 
-    def text(self, value, x, y, size=22, color=WHITE, center=False, max_width=None):
+    def text(self, value, x, y, size=22, color=WHITE, center=False, max_width=None, shadow=False):
         font = self.fonts[size]
         if max_width:
             original = value
@@ -64,7 +64,21 @@ class ConsoleDisplay:
                 value = original + '…' if original else ''
         image = font.render(value, True, color)
         rect = image.get_rect(midtop=(x, y)) if center else image.get_rect(topleft=(x, y))
+        if shadow:
+            # 밝은 무대 위에 글자가 겹칠 때만. 어두운 패널 위에서는 오히려 지저분하다.
+            self.screen.blit(font.render(value, True, INK), rect.move(2, 2))
         self.screen.blit(image, rect)
+
+    def panel(self, rect, fill=PANEL, border=None, radius=12, width=2):
+        """카드·모달의 공통 생김새. 두께와 모서리를 한곳에서 정한다."""
+        pygame.draw.rect(self.screen, fill, rect, border_radius=radius)
+        if border:
+            pygame.draw.rect(self.screen, border, rect, width, border_radius=radius)
+
+    def shade(self, alpha=190):
+        layer = pygame.Surface((WIDTH, HEIGHT), pygame.SRCALPHA)
+        layer.fill((*INK, alpha))
+        self.screen.blit(layer, (0, 0))
 
     def poll(self):
         events = pygame.event.get()

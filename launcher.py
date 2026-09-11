@@ -6,7 +6,9 @@ import sys
 
 import pygame
 
-from console_ui import BG, GOLD, MUTED, WHITE, ConsoleDisplay, back_combo, options
+from console_ui import (BG, GOLD, INK, LINE, MUTED, P1, P2, PANEL, PANEL_HI, WHITE,
+                        ConsoleDisplay, back_combo, options)
+from theme import shade
 
 ROOT = Path(__file__).resolve().parent
 
@@ -92,6 +94,35 @@ class Launcher:
                 self.launch()
         return True
 
+    def card(self, index, start):
+        """게임 한 칸. 고른 칸은 살짝 떠오르고 금색 테두리가 붙는다."""
+        ui = self.ui
+        active = index == self.selected
+        game = self.games[index]
+        rect = pygame.Rect(32 + (index - start) * 250, 120 if active else 126, 236, 234 if active else 222)
+        if active:
+            # 떠 있는 느낌을 주는 그림자. 선택이 색 하나로만 표시되면 눈에 덜 띈다.
+            ui.panel(rect.move(0, 6), fill=INK, radius=14)
+        ui.panel(rect, fill=PANEL_HI if active else PANEL,
+                 border=GOLD if active else LINE, radius=14, width=3 if active else 2)
+        accent = P1 if index % 2 == 0 else P2
+        art = pygame.Rect(rect.x + 18, rect.y + 18, 200, 102)
+        pygame.draw.rect(ui.screen, accent, art, border_radius=8)
+        # 대각선 무늬로 단색 덩어리에 결을 넣는다.
+        stripes = pygame.Surface(art.size, pygame.SRCALPHA)
+        for x in range(-art.height, art.width, 26):
+            pygame.draw.polygon(stripes, (*INK, 28), [(x, art.height), (x + 11, art.height),
+                                                      (x + 11 + art.height, 0), (x + art.height, 0)])
+        ui.screen.blit(stripes, art.topleft)
+        ui.text(f'{index + 1:02d}', art.centerx, art.y + 12, 64, shade(accent, 0.45), center=True)
+        title = game.get('title_ko', game['title']) if ui.ko else game['title']
+        desc = game.get('description_ko', game.get('description', '')) if ui.ko else game.get('description', '')
+        ui.text(title, rect.x + 18, art.bottom + 16, 22, GOLD if active else WHITE, max_width=200)
+        ui.text(desc, rect.x + 18, art.bottom + 52, 18, MUTED, max_width=200)
+        ui.text(game.get('players', ''), rect.x + 18, art.bottom + 79, 14, MUTED)
+        if active:
+            ui.text('▶', rect.right - 34, art.bottom + 74, 22, GOLD)
+
     def draw(self):
         ui = self.ui
         ui.screen.fill(BG)
@@ -99,44 +130,37 @@ class Launcher:
         ui.text('FAMI CONSOLE', 52, 27, 28)
         ui.text(ui.label('함께 고르고, 바로 플레이.', 'Pick a game. Play together.'), 52, 67, 18, MUTED)
         ui.text(f'{len(self.games):02d} GAMES', 738, 43, 18, GOLD, center=True)
+        pygame.draw.line(ui.screen, LINE, (32, 100), (768, 100))
         if self.games:
             # A bounded page keeps any number of registered games inside 800x480.
             start = (self.selected // 3) * 3
             for index in range(start, min(start + 3, len(self.games))):
-                x = 32 + (index - start) * 250
-                game = self.games[index]
-                active = index == self.selected
-                rect = pygame.Rect(x, 126, 236, 228)
-                pygame.draw.rect(ui.screen, (43, 49, 66) if active else (29, 33, 46), rect, border_radius=14)
-                if active:
-                    pygame.draw.rect(ui.screen, GOLD, rect, 3, border_radius=14)
-                accent = (235, 102, 108) if index % 2 == 0 else (102, 187, 220)
-                pygame.draw.rect(ui.screen, accent, (x + 18, 144, 200, 102), border_radius=8)
-                ui.text(f'{index + 1:02d}', x + 118, 154, 64, BG, center=True)
-                title = game.get('title_ko', game['title']) if ui.ko else game['title']
-                desc = game.get('description_ko', game.get('description', '')) if ui.ko else game.get('description', '')
-                ui.text(title, x + 18, 262, 22, GOLD if active else WHITE, max_width=200)
-                ui.text(desc, x + 18, 298, 18, MUTED, max_width=200)
-                ui.text(game.get('players', ''), x + 18, 325, 18, MUTED)
-            ui.text(f'{self.selected + 1} / {len(self.games)}', 400, 368, 18, MUTED, center=True)
+                self.card(index, start)
+            # 페이지 점. 등록된 게임이 세 개를 넘어갈 때 어디쯤인지 알려 준다.
+            pages = (len(self.games) + 2) // 3
+            if pages > 1:
+                for page in range(pages):
+                    x = 400 - (pages - 1) * 9 + page * 18
+                    pygame.draw.circle(ui.screen, GOLD if page == start // 3 else LINE, (x, 374), 4)
+            else:
+                ui.text(f'{self.selected + 1} / {len(self.games)}', 400, 366, 14, MUTED, center=True)
         else:
-            ui.text(ui.label('등록된 게임이 없습니다', 'No games registered'), 400, 218, 28, center=True)
-            ui.text('games.json', 400, 265, 22, GOLD, center=True)
+            ui.text(ui.label('등록된 게임이 없습니다', 'No games registered'), 400, 208, 28, center=True)
+            ui.text('games.json', 400, 258, 22, GOLD, center=True)
         if self.message:
-            ui.text(self.message, 400, 397, 18, GOLD, center=True, max_width=730)
-        pygame.draw.line(ui.screen, (62, 67, 82), (32, 429), (768, 429))
+            ui.text(self.message, 400, 394, 18, GOLD, center=True, max_width=730)
+        pygame.draw.line(ui.screen, LINE, (32, 429), (768, 429))
         ui.text(ui.label('방향: 선택     A / START: 실행     SELECT: 종료 메뉴',
                          'D-pad: Choose    A / START: Play    SELECT: Exit menu'),
                 400, 440, 18, center=True)
         if self.confirm_exit:
-            shade = pygame.Surface((800, 480), pygame.SRCALPHA)
-            shade.fill((0, 0, 0, 190))
-            ui.screen.blit(shade, (0, 0))
-            pygame.draw.rect(ui.screen, (43, 49, 66), (100, 164, 600, 155), border_radius=14)
-            ui.text(ui.label('통합 메뉴를 종료할까요?', 'Exit FAMI CONSOLE?'), 400, 185, 28, center=True)
-            ui.text(ui.label('게임 메뉴만 종료합니다.', 'Closes the game menu.'), 400, 231, 18, MUTED, center=True)
+            ui.shade(200)
+            card = pygame.Rect(100, 164, 600, 155)
+            ui.panel(card, fill=PANEL_HI, border=GOLD, radius=14)
+            ui.text(ui.label('통합 메뉴를 종료할까요?', 'Exit FAMI CONSOLE?'), 400, card.top + 22, 28, center=True)
+            ui.text(ui.label('게임 메뉴만 종료합니다.', 'Closes the game menu.'), 400, card.top + 66, 18, MUTED, center=True)
             ui.text(ui.label('A / START: 종료     B / SELECT: 취소',
-                             'A / START: Exit    B / SELECT: Cancel'), 400, 272, 22, GOLD, center=True)
+                             'A / START: Exit    B / SELECT: Cancel'), 400, card.top + 106, 22, GOLD, center=True)
 
     def run(self):
         running = True
