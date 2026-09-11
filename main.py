@@ -331,7 +331,7 @@ class Fighter:
         rest = (elapsed - spec.startup - spec.active) / spec.recovery
         return max(0.0, 1.0 - rest) ** 0.6
 
-    def draw_limb(self, screen: pygame.Surface) -> None:
+    def draw_limb(self, screen: pygame.Surface, shoulder: tuple[float, float]) -> None:
         """공격을 판정 박스가 아니라 뻗은 팔다리로 보여 준다.
 
         예전에는 판정 박스를 그대로 노란 사각형으로 그렸는데, 그건 디버그
@@ -339,6 +339,28 @@ class Fighter:
         """
         spec = ATTACKS[self.attack]
         extension = self.limb_extension()
+        if self.attack == "punch":
+            # 기존 가드 팔을 이 팔로 대체한다. 어깨 -> 팔꿈치 -> 주먹을 연결한다.
+            root = (shoulder[0] + self.facing * 12, shoulder[1])
+            reach = max(0.0, extension)
+            hand = (root[0] + self.facing * (10 + (spec.reach + 4) * extension),
+                    root[1] - 5)
+            elbow = (root[0] + (hand[0] - root[0]) * .48,
+                     root[1] + 12 * (1 - reach))
+            pygame.draw.lines(screen, INK, False, [root, elbow, hand], 13)
+            pygame.draw.lines(screen, SKIN, False, [root, elbow, hand], 9)
+            glove = pygame.Rect(0, 0, 17, 16)
+            glove.center = hand
+            pygame.draw.rect(screen, INK, glove.inflate(4, 4), border_radius=5)
+            pygame.draw.rect(screen, self.color, glove, border_radius=4)
+            pygame.draw.line(screen, shade(self.color, 1.3),
+                             (glove.left+3, glove.top+3), (glove.right-4, glove.top+3), 3)
+            if self.attack_active:
+                for dy in (-10, 10):
+                    pygame.draw.line(screen, GOLD,
+                                     (hand[0]-self.facing*18, hand[1]+dy),
+                                     (hand[0]-self.facing*33, hand[1]+dy), 2)
+            return
         if abs(extension) < 0.02:
             return
         thickness = 16 if self.attack == "punch" else 19
@@ -412,6 +434,8 @@ class Fighter:
         pygame.draw.rect(screen,GOLD,(cx-4,hip[1]-5,8,6))
         # 뒤팔과 앞팔을 서로 다른 자세로 둔다.
         for side in (-1,1):
+            if self.attacking and self.attack == "punch" and side == self.facing:
+                continue
             arm_x = cx + side*15
             elbow = (arm_x + side*6, shoulder[1]+14)
             hand = (arm_x+self.facing*8, shoulder[1]+3-side*4)
@@ -431,7 +455,7 @@ class Fighter:
         eye_x=head.x+(18 if self.facing==1 else 4)
         pygame.draw.rect(screen,INK,(eye_x,head.y+12,5,4))
         if self.attacking:
-            self.draw_limb(screen)
+            self.draw_limb(screen, shoulder)
 
         if self.hit_flash > 0:
             self.draw_impact(screen)
