@@ -178,7 +178,8 @@ class ConsoleTests(unittest.TestCase):
             self.assertFalse(menu.message)
             self.assertTrue(pygame.display.get_init())
         import sys
-        for module, klass in (('main', 'Game'), ('pong', 'PaddleGame'), ('quest', 'Quest')):
+        for module, klass in (('main', 'Game'), ('pong', 'PaddleGame'), ('quest', 'Quest'),
+                              ('cargo', 'CargoGame')):
             result = subprocess.run([sys.executable, '-c',
                 f'import pygame; from {module} import {klass}; '
                 f'game = {klass}(fullscreen=False); '
@@ -217,6 +218,82 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(game.scores, [7, 0])
         self.assertEqual(game.state, 'over')
         game.draw(); game.ui.present()
+
+
+    def test_cargo_is_carried_by_both_players(self):
+        """가로 이동이 두 사람 의도의 평균이라는 규칙은 이 게임의 전부다."""
+        from cargo import CargoGame, CARRY_SPEED
+        game = CargoGame(False)
+        for inputs, expected in ((('right', 'left'), 0), (('right', 'right'), CARRY_SPEED),
+                                 (('right', None), CARRY_SPEED / 2)):
+            game.reset()
+            start = game.cx
+            for _ in range(60):
+                game.move_plank(1 / 60, tuple(pad(*(name,) if name else ()) for name in inputs))
+            self.assertAlmostEqual(game.cx - start, expected, delta=1)
+        # 높이차 상한을 넘기면 두 손이 같은 양씩 물러난다. 한쪽만 손해 보면 협동이 아니다.
+        from cargo import TILT_LIMIT
+        game.reset()
+        for _ in range(300):
+            game.move_plank(1 / 60, (pad('up'), pad('down')))
+        self.assertAlmostEqual(game.hands[1] - game.hands[0], TILT_LIMIT, delta=0.01)
+        self.assertAlmostEqual(sum(game.hands) / 2, 300, delta=0.01)
+
+    def test_cargo_catch_slide_deliver_and_drop(self):
+        from cargo import CargoGame, Crate, CRATE_TONES, CX_MAX, FIELD
+        game = CargoGame(False)
+        game.state = 'play'
+
+        def play(frames, *inputs):
+            for _ in range(frames):
+                game.next_drop = 99           # 검사 중에는 새 화물이 끼어들지 않게 한다
+                game.warnings.clear()
+                game.update(1 / 60, tuple(pad(*keys) for keys in inputs))
+
+        def drop_at(x):
+            game.air.append(Crate(x, FIELD.top + 36, (0, 150), CRATE_TONES[0]))
+
+        drop_at(game.cx)                       # 수평 판자는 화물을 받아 붙잡는다
+        play(120, (), ())
+        self.assertEqual((len(game.load), game.lives), (1, 3))
+        play(60, (), ())
+        self.assertEqual(len(game.load), 1)
+        play(120, ('up',), ('down',))          # 기울이면 낮은 쪽으로 미끄러져 판자를 벗어난다
+        self.assertEqual(len(game.load), 0)
+        play(180, (), ())
+        self.assertEqual((game.lives, game.delivered), (2, 0))   # 투입구 밖이면 바닥에 깨진다
+
+        game.cx = CX_MAX                       # 투입구 앞에서 기울이면 배달된다
+        game.hands = [300.0, 300.0]            # 받을 때는 다시 수평으로
+        drop_at(CX_MAX)
+        play(120, (), ())
+        self.assertEqual(len(game.load), 1)
+        play(150, ('up',), ('down',))
+        self.assertEqual((game.delivered, game.lives, len(game.air)), (1, 2, 0))
+
+        game.cx = 200                          # 세 번 놓치면 경기가 끝난다
+        for _ in range(2):
+            drop_at(660)
+            play(200, (), ())
+        self.assertEqual((game.lives, game.state), (0, 'over'))
+
+    def test_cargo_load_never_overlaps_or_leaks(self):
+        from cargo import CargoGame, Crate, CRATE_TONES, CRATE, HALF, FIELD
+        game = CargoGame(False)
+        game.state = 'play'
+        for _ in range(5):
+            game.air.append(Crate(game.cx, FIELD.top + 36, (0, 150), CRATE_TONES[0]))
+            for _ in range(100):
+                game.next_drop = 99
+                game.warnings.clear()
+                game.update(1 / 60, (pad(), pad()))
+        for a, b in zip(game.load, game.load[1:]):
+            self.assertGreaterEqual(b.u - a.u, CRATE - 0.01)
+        for crate in game.load:
+            self.assertLessEqual(abs(crate.u), HALF + CRATE)
+        self.assertEqual(len(game.load) + len(game.air) + game.delivered + (3 - game.lives), 5)
+        game.draw(); game.ui.present()
+        self.assertEqual(game.ui.screen.get_size(), (800, 480))
 
 
 if __name__ == '__main__':

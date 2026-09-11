@@ -134,6 +134,21 @@ class Launcher:
             pygame.draw.circle(art, shade(GOLD,.3), (100, 47), 29)
             pygame.draw.polygon(art, GOLD, [(78,35),(88,44),(100,29),(112,44),(122,35),(118,62),(82,62)])
             pygame.draw.rect(art, WHITE, (85,65,30,3))
+        elif script == 'cargo.py':
+            pygame.draw.rect(art, INK, (0, 86, 200, 16))
+            pygame.draw.polygon(art, shade(GOLD, .45), [(160,30),(196,30),(188,58),(170,58)])
+            pygame.draw.rect(art, shade(GOLD, .3), (170, 56, 18, 30))
+            for x, color in ((52, P1), (124, P2)):
+                pygame.draw.line(art, WHITE, (x-5, 84), (x-6, 70), 5)
+                pygame.draw.line(art, WHITE, (x+5, 84), (x+6, 70), 5)
+                pygame.draw.rect(art, color, (x-8, 66, 16, 21), border_radius=3)
+                pygame.draw.line(art, WHITE, (x, 69), (x, 46), 4)
+                pygame.draw.circle(art, WHITE, (x, 58), 7)
+            pygame.draw.line(art, INK, (48, 46), (128, 42), 10)
+            pygame.draw.line(art, (176, 128, 84), (48, 46), (128, 42), 7)
+            for cx, cy in ((72, 30), (104, 28)):
+                pygame.draw.rect(art, (176, 128, 84), (cx-11, cy-11, 22, 22), border_radius=3)
+                pygame.draw.rect(art, (206, 162, 110), (cx-11, cy-11, 22, 6), border_radius=3)
         else:
             pygame.draw.rect(art, accent, (65, 18, 70, 68), border_radius=8)
             pygame.draw.rect(art, INK, (78, 29, 44, 27), border_radius=3)

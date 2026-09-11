@@ -22,5 +22,13 @@
     "description_ko": "혼자 떠나는 던전 탐험",
     "players": "1 PLAYER",
     "script": "quest.py"
+  },
+  {
+    "title": "CARGO CARRY",
+    "title_ko": "둘이서 짐 나르기",
+    "description": "Co-op: one plank, two carriers",
+    "description_ko": "판자 하나를 둘이 들고 배달",
+    "players": "2 PLAYERS CO-OP",
+    "script": "cargo.py"
   }
 ]
