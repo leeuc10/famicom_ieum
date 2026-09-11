@@ -17,6 +17,7 @@ from dataclasses import dataclass
 
 import pygame
 from game_fx import Sparks
+from fighter_sprites import FighterSprites
 
 from fonts import find_korean_font
 from input_adapter import KeyboardAdapter, Pad
@@ -134,8 +135,8 @@ ATTACKS = {
     # 위 정의로 실측한 이득은 펀치 +0F, 킥 +2F 로 각자의 startup(3F, 6F)보다
     # 작다. 즉 맞은 쪽이 항상 되받아칠 수 있다. 가드를 넣기 전까지는
     # 때린 쪽에 이득을 더 주지 않는 편이 연타 우위를 막는 데 유리하다.
-    "punch": AttackSpec(0.05, 0.06, 0.13, 0.18, 8, 24, 44, 28, 25),
-    "kick": AttackSpec(0.10, 0.08, 0.16, 0.26, 13, 40, 62, 18, 58),
+    "punch": AttackSpec(0.05, 0.06, 0.13, 0.18, 8, 24, 44, 28, 18),
+    "kick": AttackSpec(0.10, 0.08, 0.16, 0.26, 13, 40, 62, 18, 22),
 }
 
 
@@ -280,7 +281,12 @@ class Fighter:
 
     def attack_box(self) -> pygame.Rect:
         spec = ATTACKS[self.attack]
-        x = self.rect.right if self.facing == 1 else self.rect.left - spec.reach
+        # The generated boot/glove defines the forward edge, so invisible
+        # extensions of the old procedural limb no longer deal damage.
+        row = 3 if self.attack == "punch" else 4
+        sprite, pivot = self.sprites.frames[0, row, 1, self.facing]
+        edge = self.rect.centerx + (sprite.get_width()-pivot if self.facing == 1 else -pivot)
+        x = edge-spec.reach if self.facing == 1 else edge
         return pygame.Rect(x, self.rect.y + spec.offset, spec.reach, spec.height)
 
     def take_hit(self, spec: AttackSpec, push: int) -> None:
@@ -320,81 +326,6 @@ class Fighter:
         self.health_ghost = (max(self.health, self.health_ghost - 46 * dt)
                              if self.health_ghost > self.health else float(self.health))
 
-    def limb_extension(self) -> float:
-        """팔다리가 얼마나 뻗었는지(0~1). 음수는 뒤로 당기는 예비 동작."""
-        spec = ATTACKS[self.attack]
-        elapsed = self.attack_phase
-        if elapsed < spec.startup:
-            return -0.28 * (elapsed / spec.startup)
-        if elapsed < spec.startup + spec.active:
-            return 1.0
-        rest = (elapsed - spec.startup - spec.active) / spec.recovery
-        return max(0.0, 1.0 - rest) ** 0.6
-
-    def draw_limb(self, screen: pygame.Surface, shoulder: tuple[float, float], hip: tuple[float, float]) -> None:
-        """공격을 판정 박스가 아니라 뻗은 팔다리로 보여 준다.
-
-        예전에는 판정 박스를 그대로 노란 사각형으로 그렸는데, 그건 디버그
-        표시지 동작이 아니다. 실제 판정을 보고 싶으면 --hitbox 로 켠다.
-        """
-        spec = ATTACKS[self.attack]
-        extension = self.limb_extension()
-        if self.attack == "punch":
-            # 기존 가드 팔을 이 팔로 대체한다. 어깨 -> 팔꿈치 -> 주먹을 연결한다.
-            root = (shoulder[0] + self.facing * 12, shoulder[1])
-            reach = max(0.0, extension)
-            hand = (root[0] + self.facing * (10 + (spec.reach + 4) * extension),
-                    root[1] - 5)
-            elbow = (root[0] + (hand[0] - root[0]) * .48,
-                     root[1] + 12 * (1 - reach))
-            pygame.draw.lines(screen, INK, False, [root, elbow, hand], 13)
-            pygame.draw.lines(screen, SKIN, False, [root, elbow, hand], 9)
-            glove = pygame.Rect(0, 0, 17, 16)
-            glove.center = hand
-            pygame.draw.rect(screen, INK, glove.inflate(4, 4), border_radius=5)
-            pygame.draw.rect(screen, self.color, glove, border_radius=4)
-            pygame.draw.line(screen, shade(self.color, 1.3),
-                             (glove.left+3, glove.top+3), (glove.right-4, glove.top+3), 3)
-            if self.attack_active:
-                for dy in (-10, 10):
-                    pygame.draw.line(screen, GOLD,
-                                     (hand[0]-self.facing*18, hand[1]+dy),
-                                     (hand[0]-self.facing*33, hand[1]+dy), 2)
-            return
-        # 킥은 새 막대를 붙이지 않고 앞다리의 무릎과 발목을 움직인다.
-        phase = self.attack_phase
-        if phase < spec.startup:
-            lift = min(1.0, phase / spec.startup)
-            stretch = 0.0
-        elif phase < spec.startup + spec.active:
-            lift, stretch = 1.0, 1.0
-        else:
-            recovery = (phase - spec.startup - spec.active) / spec.recovery
-            stretch = max(0.0, 1 - recovery * 2)
-            lift = min(1.0, max(0.0, (1 - recovery) * 2))
-        facing = self.facing
-        root = (hip[0] + facing*5, hip[1])
-        knee = (root[0] + facing*(10 + lift*9 + stretch*20),
-                root[1] - lift*15)
-        ankle = (root[0] + facing*(8 + stretch*(FIGHTER_W/2 + spec.reach - 24)),
-                 self.rect.bottom - 5 - lift*21 + stretch*4)
-        points = [root, knee, ankle]
-        pygame.draw.lines(screen, INK, False, points, 16)
-        pygame.draw.lines(screen, shade(self.color, .82), False, points, 12)
-        pygame.draw.line(screen, shade(self.color, 1.25),
-                         (knee[0],knee[1]-3), (ankle[0],ankle[1]-3), 3)
-        # 발등과 발바닥이 있는 부츠로 주먹과 구분한다.
-        boot = [(ankle[0]-facing*7,ankle[1]-5),
-                (ankle[0]+facing*5,ankle[1]-8),
-                (ankle[0]+facing*11,ankle[1]+7),
-                (ankle[0]-facing*6,ankle[1]+7)]
-        pygame.draw.polygon(screen, INK, boot)
-        pygame.draw.line(screen, WHITE, (ankle[0]+facing*8,ankle[1]-4),
-                         (ankle[0]+facing*11,ankle[1]+6), 3)
-        if self.attack_active:
-            pygame.draw.line(screen, GOLD, (ankle[0]-facing*6,ankle[1]-17),
-                             (ankle[0]-facing*25,ankle[1]-20), 2)
-
     def draw_impact(self, screen: pygame.Surface) -> None:
         """맞은 순간 튀는 불꽃. 어느 쪽에서 맞았는지도 같이 보여 준다."""
         progress = 1 - self.hit_flash / 0.13
@@ -418,60 +349,7 @@ class Fighter:
         pygame.draw.ellipse(shadow, (0, 0, 0, round(120 * (1 - 0.65 * lift))), shadow.get_rect())
         screen.blit(shadow, (r.centerx - width // 2, GROUND_Y - 9))
 
-        # 관절을 따로 그려 걷기·점프·피격 자세를 만든다. 판정 rect는 그대로다.
-        base = WHITE if self.hit_flash > 0 else self.color
-        sway = math.sin(self.walk_cycle) if self.moving else 0
-        breath = math.sin(self.pose_time * 3) * 1.5
-        lean = -self.hit_dir * 7 if self.stunned else self.facing * (3 if self.moving else 0)
-        cx = r.centerx + lean
-        hip = (cx, r.bottom - 25)
-        shoulder = (cx, r.y + 33 + breath)
-        def limb(points, color, width):
-            pygame.draw.lines(screen, INK, False, points, width+4)
-            pygame.draw.lines(screen, color, False, points, width)
-        for side in (-1, 1):
-            if self.attacking and self.attack == "kick" and side == self.facing:
-                continue
-            stride = side * sway * 12
-            foot = (r.centerx + side*13 + stride, r.bottom-3)
-            knee = (hip[0]+side*11-stride*.3, r.bottom-15)
-            if not self.on_ground:
-                foot = (r.centerx+side*21, r.bottom-17)
-                knee = (hip[0]+side*13, r.bottom-28)
-            limb([hip, knee, foot], shade(base, .7 if side == -1 else .95), 12)
-            pygame.draw.line(screen, INK, foot, (foot[0]+self.facing*9,foot[1]), 9)
-        torso = [(cx-16,shoulder[1]-6),(cx+16,shoulder[1]-6),
-                 (hip[0]+12,hip[1]),(hip[0]-12,hip[1])]
-        pygame.draw.polygon(screen, INK, torso)
-        pygame.draw.polygon(screen, base, torso)
-        pygame.draw.line(screen, shade(base,1.3), (cx-11,shoulder[1]-3),(cx-7,hip[1]-5),4)
-        pygame.draw.polygon(screen, WHITE, [(cx-7,shoulder[1]-5),(cx,shoulder[1]+9),(cx+7,shoulder[1]-5)])
-        pygame.draw.line(screen, INK,(cx-13,hip[1]-2),(cx+13,hip[1]-2),7)
-        pygame.draw.rect(screen,GOLD,(cx-4,hip[1]-5,8,6))
-        # 뒤팔과 앞팔을 서로 다른 자세로 둔다.
-        for side in (-1,1):
-            if self.attacking and self.attack == "punch" and side == self.facing:
-                continue
-            arm_x = cx + side*15
-            elbow = (arm_x + side*6, shoulder[1]+14)
-            hand = (arm_x+self.facing*8, shoulder[1]+3-side*4)
-            limb([(arm_x,shoulder[1]),elbow,hand],SKIN,8)
-            pygame.draw.circle(screen,INK,hand,8)
-            pygame.draw.circle(screen,shade(base,.8),hand,6)
-        head = pygame.Rect(0,0,27,26)
-        head.midbottom=(cx+self.facing*2,shoulder[1]-2)
-        pygame.draw.rect(screen,INK,head.inflate(4,4),border_radius=5)
-        pygame.draw.rect(screen,SKIN,head,border_radius=4)
-        pygame.draw.rect(screen,INK,(head.x,head.y,head.w,7))
-        pygame.draw.rect(screen,base,(head.x-2,head.y+5,head.w+4,5))
-        ribbon_x=head.centerx-self.facing*15
-        pygame.draw.lines(screen,base,False,[(ribbon_x,head.y+8),
-            (ribbon_x-self.facing*15,head.y+10+math.sin(self.pose_time*8)*4),
-            (ribbon_x-self.facing*23,head.y+15)],4)
-        eye_x=head.x+(18 if self.facing==1 else 4)
-        pygame.draw.rect(screen,INK,(eye_x,head.y+12,5,4))
-        if self.attacking:
-            self.draw_limb(screen, shoulder, hip)
+        self.sprites.draw(screen, self)
 
         if self.hit_flash > 0:
             self.draw_impact(screen)
@@ -515,6 +393,7 @@ class Game:
             print("한글 폰트를 찾지 못해 영문 문구로 실행합니다.")
             print("  라즈베리파이 / 데비안 계열:  sudo apt install -y fonts-nanum")
             print("  또는 assets/fonts/ 에 ttf 파일을 넣으세요.")
+        self.sprites = FighterSprites(ATTACKS)
         self.stage = build_stage()
         self.title_bg = self.build_title_bg()
         self.input = KeyboardAdapter()
@@ -549,6 +428,7 @@ class Game:
     def reset_match(self) -> None:
         self.p1 = Fighter("P1", P1, 205, 1)
         self.p2 = Fighter("P2", P2, 705, -1)
+        self.p1.sprites = self.p2.sprites = self.sprites
         self.round_number = 1
         self.p1_wins = self.p2_wins = 0
         self.round_time = ROUND_TIME

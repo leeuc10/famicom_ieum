@@ -25,6 +25,33 @@ class ConsoleTests(unittest.TestCase):
     def tearDown(self):
         pygame.quit()
 
+    def test_sprite_frames_and_attack_contact(self):
+        from main import Game, ATTACKS
+        game = Game(False)
+        self.assertEqual(len(game.sprites.frames), 96)
+        for sprite, pivot in game.sprites.frames.values():
+            self.assertEqual(sprite.get_bounding_rect().bottom, sprite.get_height())
+            self.assertTrue(sprite.get_flags() & pygame.SRCALPHA)
+        for attack in ('punch', 'kick'):
+            for facing in (1, -1):
+                game.reset_match()
+                a, b = game.p1, game.p2
+                a.x = 400; a.sync_rect(); a.facing = facing
+                a.start_attack(attack)
+                spec = ATTACKS[attack]
+                a.attack_time = spec.duration - spec.startup - .001
+                box = a.attack_box()
+                b.x = box.right-2 if facing==1 else box.left-b.rect.width+2
+                b.sync_rect()
+                game.resolve_hits()
+                self.assertEqual(b.health, 100-spec.damage)
+                a.attack_connected = False
+                b.health = 100
+                b.x = box.right+1 if facing==1 else box.left-b.rect.width-1
+                b.sync_rect()
+                game.resolve_hits()
+                self.assertEqual(b.health,100)
+
     def test_visual_effects_expire_and_are_bounded(self):
         from game_fx import Sparks
         effect = Sparks()
