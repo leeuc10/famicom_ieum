@@ -6,6 +6,7 @@
 
 from __future__ import annotations
 
+import argparse
 import math
 import sys
 from dataclasses import dataclass
@@ -218,10 +219,21 @@ class Fighter:
 
 
 class Game:
-    def __init__(self) -> None:
+    def __init__(self, fullscreen: bool = True, margin: int = 0) -> None:
         pygame.init()
         pygame.display.set_caption("FAMI FIGHTERS")
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
+        desktop_w, desktop_h = pygame.display.get_desktop_sizes()[0]
+        if fullscreen:
+            self.display = pygame.display.set_mode((desktop_w, desktop_h), pygame.FULLSCREEN)
+        else:
+            # 창 테두리와 데스크톱 패널을 위한 공간을 남긴다.
+            scale = min(1.0, max(1, desktop_w - 80) / WIDTH,
+                        max(1, desktop_h - 100) / HEIGHT)
+            self.display = pygame.display.set_mode(
+                (max(1, int(WIDTH * scale)), max(1, int(HEIGHT * scale))),
+                pygame.RESIZABLE)
+        self.screen = pygame.Surface((WIDTH, HEIGHT))
+        self.margin = margin
         self.clock = pygame.time.Clock()
         korean = find_korean_font()
         self.strings = STRINGS_KO if korean else STRINGS_EN
@@ -468,8 +480,26 @@ class Game:
                 self.draw_match_over()
             else:
                 self.draw_fight()
-            pygame.display.flip()
+            self.present()
+
+    def present(self) -> None:
+        """게임 좌표는 유지하고 실제 창 안에 비율을 보존해 표시한다."""
+        width, height = self.display.get_size()
+        scale = min(width / WIDTH, height / HEIGHT) * (1 - 2 * self.margin / 100)
+        size = (max(1, int(WIDTH * scale)), max(1, int(HEIGHT * scale)))
+        self.display.fill((0, 0, 0))
+        frame = pygame.transform.scale(self.screen, size)
+        self.display.blit(frame, ((width - size[0]) // 2, (height - size[1]) // 2))
+        pygame.display.flip()
 
 
 if __name__ == "__main__":
-    Game().run()
+    parser = argparse.ArgumentParser(description="FAMI FIGHTERS")
+    display_mode = parser.add_mutually_exclusive_group()
+    display_mode.add_argument("--fullscreen", action="store_true", dest="fullscreen", help="전체 화면으로 실행")
+    display_mode.add_argument("--windowed", action="store_false", dest="fullscreen", help="창 모드로 실행")
+    parser.set_defaults(fullscreen=True)
+    parser.add_argument("--margin", type=int, choices=range(0, 21), default=0,
+                        metavar="0-20", help="각 가장자리 여백 비율(%%), 기본 0")
+    args = parser.parse_args()
+    Game(fullscreen=args.fullscreen, margin=args.margin).run()
