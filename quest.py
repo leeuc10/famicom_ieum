@@ -37,8 +37,9 @@ HERO_SPEED = 138
 # 거두기 5프레임이다. 원작처럼 '탁 나갔다 돌아오는' 리듬을 노린 값이다.
 SWORD_TIME = 0.26           # 휘두르는 전체 시간
 SWORD_ACTIVE = (0.05, 0.17)  # 이 구간에만 칼날에 판정이 있다
-SWORD_REACH = 34            # 칼이 뻗는 길이(그림)
 SWORD_BOX = (36, 24)        # 판정 크기. 그림보다 조금 후해야 헛치는 느낌이 덜하다.
+SWORD_TIP = 44              # 몸 중심에서 칼끝까지(최대). 판정 상자 끝과 같은 거리로 맞췄다.
+SWORD_SIDE = 7              # 위/아래를 찌를 때 칼을 옆으로 비켜 놓는 거리
 INVULN = 0.9                # 맞은 뒤 무적. 연속으로 갈려 나가는 것을 막는다
 TRANSITION = 0.38
 DOOR_PUSH = 4               # 문턱을 이만큼 밀고 나가면 옆 방으로 넘어간다
@@ -48,7 +49,20 @@ PALETTE = {
     'k': (16, 18, 28), 'w': (238, 238, 232), 'b': (124, 108, 176),
     'o': (226, 118, 92), 'p': (150, 88, 170), 'm': (84, 44, 98),
     'e': (255, 92, 92), 'n': (60, 66, 88),
+    'h': (110, 70, 46), 'l': (170, 182, 206),
 }
+
+# 오른쪽을 향한 칼. 나머지 세 방향은 뒤집고 돌려서 쓴다.
+# 칼날은 w(하이라이트) / l(강철) / n(그림자) 3단으로 눕혀야 판자가 아니라
+# 날로 읽힌다. 길이를 13칸으로 맞춘 건 끝까지 뻗었을 때 손잡이가 주인공
+# 손 위치에 오게 하려는 것이다. 더 길면 손잡이가 가슴 한복판에 박힌다.
+SWORD_ART = (
+    '..ydddddddd..',
+    '.hydwwwwwwwd.',
+    'hhydlllllllld',
+    '.hydnnnnnnnd.',
+    '..ydddddddd..',
+)
 
 HERO_ART = {
     'down': (
@@ -411,6 +425,11 @@ class Quest:
         self.art['hero_right'] = self.art['hero_side']
         for kind, pattern in ENEMY_ART.items():
             self.art[kind] = make_sprite(pattern, 4 if kind == 'boss' else scale)
+        sword = make_sprite(SWORD_ART, scale)
+        self.art['sword_right'] = sword
+        self.art['sword_left'] = pygame.transform.flip(sword, True, False)
+        self.art['sword_up'] = pygame.transform.rotate(sword, 90)
+        self.art['sword_down'] = pygame.transform.rotate(sword, -90)
         self.torch_glow = glow(66, (255, 156, 66))
         self.new_game()
         self.state = 'title'
@@ -763,8 +782,6 @@ class Quest:
         # 무적 시간에는 한 프레임 걸러 지운다. 원작에서 맞은 걸 알려 주던 방식.
         if hero.invuln > 0 and int(hero.invuln * 22) % 2:
             return
-        if hero.swinging:
-            self.draw_sword(offset)
         sprite = self.art[f'hero_{hero.facing}']
         cx, cy = hero.rect.centerx + offset[0], hero.rect.centery + offset[1]
         pygame.draw.ellipse(self.ui.screen, INK, (cx-15,cy+11,30,9))
@@ -778,26 +795,43 @@ class Quest:
         bob = round(math.sin(hero.bob) * 1.5)
         self.ui.screen.blit(sprite, sprite.get_rect(
             center=(hero.rect.centerx + offset[0], hero.rect.centery + offset[1] + bob)))
+        if hero.swinging:
+            # 몸보다 위에 그려야 손잡이가 손에 쥔 것처럼 보인다.
+            self.draw_sword(offset)
 
     def draw_sword(self, offset):
+        """칼은 늘어나지 않는다. 손에서 앞으로 밀려 나올 뿐이다.
+
+        예전에는 길이 0 인 막대를 34px 까지 늘였다. 그러면 칼이 아니라
+        고무줄이 자라는 것으로 보인다. 길이가 고정된 스프라이트를 앞으로
+        밀고, 아직 안 나온 뒷부분은 몸 앞쪽만 남기고 잘라 낸다.
+        """
         hero = self.hero
-        reach = round(SWORD_REACH * hero.thrust)
-        if reach < 2:
+        if hero.thrust <= 0:
             return
-        r = hero.rect.move(offset)
+        sprite = self.art[f'sword_{hero.facing}']
+        hx = hero.rect.centerx + offset[0]
+        hy = hero.rect.centery + offset[1]
+        tip = round(SWORD_TIP * hero.thrust)
+        rect = sprite.get_rect(center=(hx, hy))
+        clip = self.ui.screen.get_clip()
         if hero.facing == 'right':
-            blade = pygame.Rect(r.right - 4, r.centery - 4, reach, 8)
+            rect.right = hx + tip
+            front = pygame.Rect(hx, clip.top, clip.right - hx, clip.height)
         elif hero.facing == 'left':
-            blade = pygame.Rect(r.left + 4 - reach, r.centery - 4, reach, 8)
-        elif hero.facing == 'up':
-            blade = pygame.Rect(r.centerx - 4, r.top + 4 - reach, 8, reach)
+            rect.left = hx - tip
+            front = pygame.Rect(clip.left, clip.top, hx - clip.left, clip.height)
+        elif hero.facing == 'down':
+            # 위아래로 찌를 때는 칼을 쥔 쪽으로 살짝 비켜 놓는다. 몸 한복판에
+            # 세워 두면 손잡이가 가슴에 박힌 것처럼 보인다.
+            rect.bottom, rect.centerx = hy + tip, hx + SWORD_SIDE
+            front = pygame.Rect(clip.left, hy, clip.width, clip.bottom - hy)
         else:
-            blade = pygame.Rect(r.centerx - 4, r.bottom - 4, 8, reach)
-        pygame.draw.rect(self.ui.screen, INK, blade.inflate(4, 4), border_radius=3)
-        pygame.draw.rect(self.ui.screen, (214, 222, 236), blade, border_radius=2)
-        hilt = pygame.Rect(0, 0, 12, 12)
-        hilt.center = r.center
-        pygame.draw.rect(self.ui.screen, GOLD, hilt, border_radius=2)
+            rect.top, rect.centerx = hy - tip, hx + SWORD_SIDE
+            front = pygame.Rect(clip.left, clip.top, clip.width, hy - clip.top)
+        self.ui.screen.set_clip(clip.clip(front))
+        self.ui.screen.blit(sprite, rect)
+        self.ui.screen.set_clip(clip)
 
     def draw_hud(self):
         ui = self.ui
