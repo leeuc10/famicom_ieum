@@ -38,5 +38,13 @@
     "description_ko": "60초 운석 돌파",
     "players": "1 PLAYER",
     "script": "starfall.py"
+  },
+  {
+    "title": "PRISM BREAK",
+    "title_ko": "프리즘 브레이크",
+    "description": "Clear three fields of bricks",
+    "description_ko": "벽돌을 깨고 3스테이지 돌파",
+    "players": "1 PLAYER",
+    "script": "breakout.py"
   }
 ]

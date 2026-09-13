@@ -134,6 +134,13 @@ class Launcher:
             pygame.draw.circle(art, shade(GOLD,.3), (100, 47), 29)
             pygame.draw.polygon(art, GOLD, [(78,35),(88,44),(100,29),(112,44),(122,35),(118,62),(82,62)])
             pygame.draw.rect(art, WHITE, (85,65,30,3))
+        elif script == 'breakout.py':
+            for row, color in enumerate((P1, GOLD, P2)):
+                for col in range(5):
+                    pygame.draw.rect(art, color, (12+col*36, 10+row*16, 31, 11), border_radius=2)
+            pygame.draw.line(art, MUTED, (90,76), (117,58), 2)
+            pygame.draw.circle(art, WHITE, (117,58), 5)
+            pygame.draw.rect(art, P2, (66,88,65,7), border_radius=3)
         elif script == 'starfall.py':
             for i in range(25):
                 pygame.draw.circle(art, MUTED, ((i*47)%200, (i*31)%102), 1)

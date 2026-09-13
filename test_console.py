@@ -179,7 +179,7 @@ class ConsoleTests(unittest.TestCase):
             self.assertTrue(pygame.display.get_init())
         import sys
         for module, klass in (('main', 'Game'), ('pong', 'PaddleGame'), ('quest', 'Quest'),
-                              ('cargo', 'CargoGame'), ('starfall', 'Starfall')):
+                              ('cargo', 'CargoGame'), ('starfall', 'Starfall'), ('breakout', 'PrismBreak')):
             result = subprocess.run([sys.executable, '-c',
                 f'import pygame; from {module} import {klass}; '
                 f'game = {klass}(fullscreen=False); '
@@ -219,6 +219,75 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(game.state, 'over')
         game.draw(); game.ui.present()
 
+
+    def test_breakout_collision_lives_and_stages(self):
+        from breakout import PrismBreak, FIELD, RADIUS
+        game = PrismBreak(False)
+        game.reset()
+        game.launch()
+        game.ball.update(400, game.paddle.top-RADIUS-2)
+        game.velocity.update(0, 470)
+        game.update(.05, (pad(), pad()))
+        self.assertLess(game.velocity.y, 0)
+        game.ball.update(30, FIELD.bottom+RADIUS+1)
+        game.velocity.update(0, 300)
+        game.update(.01, (pad(), pad()))
+        self.assertEqual((game.lives, game.state), (2, 'ready'))
+        self.assertEqual(len(game.bricks), 40)
+        game.level = 3
+        game.bricks = [[pygame.Rect(360, 160, 66, 22), 2, 0]]
+        for expected_hp in (1, 0):
+            game.state = 'play'
+            game.ball.update(390, 195)
+            game.velocity.update(0, -470)
+            game.update(.04, (pad(), pad()))
+            if expected_hp:
+                self.assertEqual(game.bricks[0][1], expected_hp)
+                self.assertGreater(game.velocity.y, 0)
+        self.assertEqual((game.state, game.score), ('won', 235))
+        game.update(.04, (pad(), pad()))
+        self.assertEqual(game.score, 235)
+        game.handle((pad('punch'), pad()))
+        self.assertEqual((game.level, game.lives, game.score, game.state), (1, 3, 0, 'ready'))
+        self.assertEqual(game.best, 235)
+        game.bricks = [[pygame.Rect(360, 160, 66, 22), 1, 0]]
+        game.state = 'play'
+        game.ball.update(390, 195)
+        game.velocity.update(0, -470)
+        game.update(.04, (pad(), pad()))
+        self.assertEqual((game.level, game.state), (2, 'ready'))
+        game.lives = 1
+        game.launch()
+        game.ball.update(30, FIELD.bottom+RADIUS+1)
+        game.velocity.update(0, 300)
+        game.update(.01, (pad(), pad()))
+        self.assertEqual((game.lives, game.state), (0, 'over'))
+
+    def test_breakout_controller_pause_and_bounds(self):
+        from breakout import PrismBreak, FIELD
+        game = PrismBreak(False)
+        game.handle((pad(), pad('start')))
+        self.assertEqual((game.player, game.state), (1, 'ready'))
+        game.update(.02, (pad('right'), pad()))
+        self.assertEqual(game.x, 400)
+        game.handle((pad(), pad('start')))
+        game.update(.02, (pad(), pad('right')))
+        self.assertEqual(game.x, 400)
+        game.handle((pad(), pad('start')))
+        self.assertEqual(game.state, 'ready')
+        game.update(.02, (pad(), pad('right', 'kick')))
+        self.assertAlmostEqual(game.x, 404)
+        for _ in range(100):
+            game.update(.02, (pad(), pad('right')))
+        self.assertLessEqual(game.paddle.right, FIELD.right)
+        self.assertEqual(game.ball.x, game.x)
+        game.handle((pad(), pad('punch')))
+        self.assertEqual(game.state, 'play')
+        for state in ('title', 'ready', 'play', 'paused', 'won', 'over'):
+            game.state = state
+            game.draw()
+            game.ui.present()
+        self.assertFalse(game.handle((pad(), pad('select'))))
 
     def test_starfall_damage_shield_scoring_and_finish(self):
         from starfall import Starfall, Meteor, DURATION
