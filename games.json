@@ -30,5 +30,13 @@
     "description_ko": "판자 하나를 둘이 들고 배달",
     "players": "2 PLAYERS CO-OP",
     "script": "cargo.py"
+  },
+  {
+    "title": "STARFALL",
+    "title_ko": "스타폴",
+    "description": "Survive a 60-second meteor storm",
+    "description_ko": "60초 운석 돌파",
+    "players": "1 PLAYER",
+    "script": "starfall.py"
   }
 ]

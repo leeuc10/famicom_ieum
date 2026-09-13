@@ -179,7 +179,7 @@ class ConsoleTests(unittest.TestCase):
             self.assertTrue(pygame.display.get_init())
         import sys
         for module, klass in (('main', 'Game'), ('pong', 'PaddleGame'), ('quest', 'Quest'),
-                              ('cargo', 'CargoGame')):
+                              ('cargo', 'CargoGame'), ('starfall', 'Starfall')):
             result = subprocess.run([sys.executable, '-c',
                 f'import pygame; from {module} import {klass}; '
                 f'game = {klass}(fullscreen=False); '
@@ -219,6 +219,63 @@ class ConsoleTests(unittest.TestCase):
         self.assertEqual(game.state, 'over')
         game.draw(); game.ui.present()
 
+
+    def test_starfall_damage_shield_scoring_and_finish(self):
+        from starfall import Starfall, Meteor, DURATION
+        game = Starfall(False)
+        game.reset()
+        game.spawn = 99
+        game.rocks = [Meteor(400, 365, 18, 0, 0) for _ in range(3)]
+        game.update(.01, (pad(), pad()))
+        self.assertEqual(game.lives, 2)  # A cluster costs only one life.
+        game.invincible = 0
+        game.rocks = [Meteor(400, 365, 18, 0, 0)]
+        game.update(.01, (pad('kick'), pad()))
+        self.assertEqual(game.lives, 2)
+        self.assertGreater(game.cooldown, 0)
+        game.rocks = [Meteor(400, 200, 18, 0, 0)]
+        game.shots = [pygame.Vector2(400, 205)]
+        game.update(.01, (pad(), pad()))
+        self.assertEqual(game.score, 10)
+        self.assertFalse(game.rocks)
+        game.elapsed = DURATION - .01
+        game.update(.02, (pad(), pad()))
+        self.assertEqual((game.state, game.score), ('won', 210))
+        game.update(.02, (pad(), pad()))
+        self.assertEqual(game.score, 210)
+        game.handle((pad('start'), pad()))
+        self.assertEqual((game.state, game.lives, game.score), ('play', 3, 0))
+        self.assertEqual(game.best, 210)
+        game.invincible = 0
+        game.lives = 1
+        game.rocks = [Meteor(400, 365, 18, 0, 0)]
+        game.update(.01, (pad(), pad()))
+        self.assertEqual(game.state, 'over')
+
+    def test_starfall_controller_pause_bounds_and_render(self):
+        from starfall import Starfall, FIELD
+        game = Starfall(False)
+        game.handle((pad(), pad('start')))
+        self.assertEqual(game.player, 1)
+        x = game.ship.x
+        game.update(.02, (pad('left'), pad()))
+        self.assertEqual(game.ship.x, x)
+        game.handle((pad(), pad('start')))
+        elapsed = game.elapsed
+        game.update(.02, (pad(), pad('right')))
+        self.assertEqual(game.elapsed, elapsed)
+        game.handle((pad(), pad('start')))
+        for _ in range(400):
+            game.update(.02, (pad(), pad('right', 'down', 'punch')))
+        self.assertLess(game.ship.x, FIELD.right)
+        self.assertLess(game.ship.y, FIELD.bottom)
+        self.assertLess(len(game.shots), 10)
+        self.assertLess(len(game.rocks), 30)
+        for state in ('title', 'play', 'paused', 'won', 'over'):
+            game.state = state
+            game.draw()
+            game.ui.present()
+        self.assertFalse(game.handle((pad(), pad('start', 'select'))))
 
     def test_cargo_is_carried_by_both_players(self):
         """가로 이동이 두 사람 의도의 평균이라는 규칙은 이 게임의 전부다."""

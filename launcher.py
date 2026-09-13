@@ -134,6 +134,16 @@ class Launcher:
             pygame.draw.circle(art, shade(GOLD,.3), (100, 47), 29)
             pygame.draw.polygon(art, GOLD, [(78,35),(88,44),(100,29),(112,44),(122,35),(118,62),(82,62)])
             pygame.draw.rect(art, WHITE, (85,65,30,3))
+        elif script == 'starfall.py':
+            for i in range(25):
+                pygame.draw.circle(art, MUTED, ((i*47)%200, (i*31)%102), 1)
+            for x, y, r in ((36, 25, 12), (149, 35, 17), (172, 76, 9)):
+                pygame.draw.circle(art, P1, (x, y), r)
+                pygame.draw.circle(art, INK, (x-3, y-2), r//3)
+            pygame.draw.circle(art, P2, (94, 69), 25, 1)
+            pygame.draw.polygon(art, P2, [(94,45), (77,84), (94,76), (111,84)])
+            pygame.draw.polygon(art, WHITE, [(94,52), (90,71), (98,71)])
+            pygame.draw.line(art, GOLD, (94,16), (94,31), 3)
         elif script == 'cargo.py':
             pygame.draw.rect(art, INK, (0, 86, 200, 16))
             pygame.draw.polygon(art, shade(GOLD, .45), [(160,30),(196,30),(188,58),(170,58)])
